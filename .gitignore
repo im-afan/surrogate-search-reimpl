@@ -1,4 +1,4 @@
 best.pth
 data/
 summaries/
-checkpoint/*
+checkpoint/*.pth
