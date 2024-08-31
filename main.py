@@ -54,7 +54,6 @@ def test(args, model, device, test_loader, epoch, writer):
 
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler):
-    print(device)
     for epoch_num in range(epoch):
         #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
         running_loss = 0
@@ -64,15 +63,15 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             data = data.permute(1, 2, 3, 4, 0)
             output, dloss = model(data)
 
-            #print(F.cross_entropy(output, target, reduction="sum"), dloss.mean())
-            train_loss = F.cross_entropy(output, target, reduction='sum').item() + dloss.mean() * args.distrloss # sum up batch loss
-            running_loss += train_loss.detach().item() 
+            train_loss = F.cross_entropy(output, target, reduction='mean') + dloss.mean() * args.distrloss # sum up batch loss
             train_loss.backward()
             optimizer.step()
 
+            running_loss += train_loss.detach().item() 
+
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
-                print(running_loss)
+                print("loss:", running_loss)
                 running_loss = 0
 
         test(args, model, device, test_loader, epoch, writer) 

@@ -43,8 +43,10 @@ class SpikeAct_kt(torch.autograd.Function):
         grad_o = grad_output.clone()
         hu = torch.abs(input - Vth) < aa
         hu = hu.float() / (2 * aa)
-        grad_input = 0.5 * t * (1 - torch.pow(torch.tanh((input - Vth) * t), 2)) * grad_output
-        return grad_o * hu, None, None
+        grad_input = 0.5 * t * (1 - torch.pow(torch.tanh((input - Vth) * t), 2))
+        #return grad_o * hu, None, None
+        return grad_input * grad_output, None, None
+
 spikeAct = SpikeAct.apply
 spikeAct_kt = SpikeAct_kt.apply
 distrloss_layer = Distrloss_layer()
