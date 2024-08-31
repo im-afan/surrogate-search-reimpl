@@ -54,7 +54,8 @@ def test(args, model, device, test_loader, epoch, writer):
 
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler):
-    for epoch_num in epoch:
+    print(device)
+    for epoch_num in range(epoch):
         #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
         running_loss = 0
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -63,6 +64,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             data = data.permute(1, 2, 3, 4, 0)
             output, dloss = model(data)
 
+            #print(F.cross_entropy(output, target, reduction="sum"), dloss.mean())
             train_loss = F.cross_entropy(output, target, reduction='sum').item() + dloss.mean() * args.distrloss # sum up batch loss
             running_loss += train_loss.detach().item() 
             train_loss.backward()
@@ -70,6 +72,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
+                print(running_loss)
                 running_loss = 0
 
         test(args, model, device, test_loader, epoch, writer) 
@@ -125,8 +128,8 @@ def main():
         batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
     model = resnet19()
-    checkpoint = torch.load('./best.pth', map_location='cpu')
-    model.load_state_dict({k.replace('module.', ''):v for k, v in checkpoint.items()}, strict = False)
+    #checkpoint = torch.load('./best.pth', map_location='cpu')
+    #model.load_state_dict({k.replace('module.', ''):v for k, v in checkpoint.items()}, strict = False)
     model.to(device)
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay = 1e-4)

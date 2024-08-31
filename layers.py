@@ -135,8 +135,8 @@ class LIFSpike_loss_kt(nn.Module):
     #"""
     def __init__(self):
         super(LIFSpike_loss_kt, self).__init__()
-        self.k = torch.tensor([10]).float()
-        self.t = torch.tensor([5]).float()
+        self.k = torch.tensor([1]).float()
+        self.t = torch.tensor([1]).float()
         
     def forward(self, x):
         device_x = x.device
