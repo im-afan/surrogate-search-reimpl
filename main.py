@@ -15,20 +15,6 @@ best_acc=0
 best_epoch=0
 model_save_path = 'checkpoint/' + 'resnet19'
 
-def train(args, model, device, train_loader, epoch, writer, optimizer, scheduler):
-    for epoch_num in epoch:
-        #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
-            data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
-            data = data.permute(1, 2, 3, 4, 0)
-            output, dloss = model(data)
-            train_loss = F.cross_entropy(output, target, reduction='sum').item() + dloss.mean() * args.distrloss # sum up batch loss
-            train_loss.backward()
-            optimizer.step()
-        scheduler.step()
-
-
 def test(args, model, device, test_loader, epoch, writer):
     model.eval()
     test_loss = 0
@@ -66,6 +52,28 @@ def test(args, model, device, test_loader, epoch, writer):
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
+
+def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler):
+    for epoch_num in epoch:
+        #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
+        running_loss = 0
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, target = data.to(device), target.to(device)
+            data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
+            data = data.permute(1, 2, 3, 4, 0)
+            output, dloss = model(data)
+
+            train_loss = F.cross_entropy(output, target, reduction='sum').item() + dloss.mean() * args.distrloss # sum up batch loss
+            running_loss += train_loss.detach().item() 
+            train_loss.backward()
+            optimizer.step()
+
+            if(batch_idx % args.log_interval == 0):
+                writer.add_scalar("train/loss", running_loss)
+                running_loss = 0
+
+        test(args, model, device, test_loader, epoch, writer) 
+        scheduler.step()
 
 def main():
     # Training settings
@@ -123,7 +131,8 @@ def main():
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay = 1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
-    test(args, model, device, test_loader, 0, writer)
+    #test(args, model, device, test_loader, 0, writer)
+    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler)
     writer.close()
 
     
