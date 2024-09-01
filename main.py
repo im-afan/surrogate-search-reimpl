@@ -33,7 +33,6 @@ def test(args, model, device, test_loader, epoch, writer):
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
         if best_acc < 100. * correct / len(test_loader.dataset):
-            
             best_acc = 100. * correct / len(test_loader.dataset)
             best_epoch = epoch
             torch.save(model.state_dict(), model_save_path + '_{:.4f}.pth'.format(best_acc))
@@ -131,7 +130,7 @@ def main():
     #model.load_state_dict({k.replace('module.', ''):v for k, v in checkpoint.items()}, strict = False)
     model.to(device)
     print('success')
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay = 1e-4)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     #test(args, model, device, test_loader, 0, writer)
     train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler)

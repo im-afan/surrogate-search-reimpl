@@ -44,7 +44,7 @@ class SpikeAct_kt(torch.autograd.Function):
         hu = torch.abs(input - Vth) < aa
         hu = hu.float() / (2 * aa)
         grad_input = 0.5 * t * (1 - torch.pow(torch.tanh((input - Vth) * t), 2))
-        #return grad_o * hu, None, None
+        return grad_o * hu, None, None
         return grad_input * grad_output, None, None
 
 spikeAct = SpikeAct.apply
@@ -148,7 +148,7 @@ class LIFSpike_loss_kt(nn.Module):
         for step in range(steps):
             u, out[..., step], u_pre[..., step] = state_update_loss_kt(u, out[..., max(step-1, 0)], x[..., step], self.k.to(device_x), self.t.to(device_x))
         loss = distrloss_layer(u_pre)
-        return out.float(), loss
+        return out, loss
     
     
 class tdBatchNorm(nn.BatchNorm3d):
