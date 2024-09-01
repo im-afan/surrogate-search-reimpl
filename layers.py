@@ -144,7 +144,7 @@ class LIFSpike_loss_kt(nn.Module):
         device_x = x.device
         u = torch.zeros(x.shape[:-1] , device=x.device)
         u_pre = torch.zeros(x.shape , device=x.device)
-        out = torch.zeros(x.shape, device=x.device, dtype=torch.float16)
+        out = torch.zeros(x.shape, device=x.device)
         for step in range(steps):
             u, out[..., step], u_pre[..., step] = state_update_loss_kt(u, out[..., max(step-1, 0)], x[..., step], self.k.to(device_x), self.t.to(device_x))
         loss = distrloss_layer(u_pre)
