@@ -52,17 +52,19 @@ def test(args, model, device, test_loader, epoch, writer):
         100. * correct / len(test_loader.dataset)))
 
 
-def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler):
+def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn):
     for epoch_num in range(epoch):
         #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
         running_loss = 0
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
+            target = F.one_hot(target, num_classes=10).to(torch.float32)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
             output, dloss = model(data)
 
-            train_loss = F.cross_entropy(output, target, reduction='mean') + dloss.mean() * args.distrloss # sum up batch loss
+            #print(output, target)
+            train_loss = loss_fn(output, target) + dloss.mean() * args.distrloss # sum up batch loss
             train_loss.backward()
             optimizer.step()
 
@@ -132,8 +134,9 @@ def main():
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
+    loss_fn = nn.CrossEntropyLoss()
     #test(args, model, device, test_loader, 0, writer)
-    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler)
+    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn)
     writer.close()
 
     
