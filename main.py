@@ -9,6 +9,7 @@ import os
 import time
 from torchvision import datasets, transforms
 from model import *
+from model_vgg import *
 from tensorboardX import SummaryWriter
 
 best_acc=0
@@ -28,8 +29,8 @@ def test(args, model, device, test_loader, epoch, writer):
             data, target = data.to(device), target.to(device)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
-            output, dloss = model(data)
-            test_loss += F.cross_entropy(output, target, reduction='sum').item() + dloss.mean() * args.distrloss # sum up batch loss
+            output = model(data)
+            test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
         if best_acc < 100. * correct / len(test_loader.dataset):
@@ -64,9 +65,9 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             #print(data.shape, data[0][0][0][0][0], data[0][0][0][0][1], data[1][0][0][0][0], data[1][0][0][0][1])
 
             optimizer.zero_grad()
-            output, dloss = model(data)
+            output = model(data)
             #print(F.softmax(output), target, output.shape)
-            train_loss = loss_fn(output, target) + dloss.mean() * args.distrloss # sum up batch loss
+            train_loss = loss_fn(output, target) # sum up batch loss
             #train_loss = F.mse_loss(output, target, reduction="mean") + dloss.mean() * args.distrloss # sum up batch loss
             train_loss.backward()
             optimizer.step()
@@ -78,12 +79,13 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 print("loss:", running_loss)
                 running_loss = 0
 
-        #test(args, model, device, test_loader, epoch, writer) 
+        test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser.add_argument('--arch', type=str, default='vgg16', choices=['resnet19', 'vgg11', 'vgg13', 'vgg16', 'vgg19'])
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=300, metavar='N',
@@ -130,16 +132,17 @@ def main():
                         ])),
         batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
-    model = resnet19()
-    #checkpoint = torch.load('./best.pth', map_location='cpu')
-    #model.load_state_dict({k.replace('module.', ''):v for k, v in checkpoint.items()}, strict = False)
+    if(args.arch == "resnet19"):
+        model = resnet19()
+    elif(args.arch == "vgg11"):
+        model = vgg11_bn()
+    else:
+        model = vgg16_bn()
     model.to(device)
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
-    #optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
-    #test(args, model, device, test_loader, 0, writer)
     train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn)
     writer.close()
 
