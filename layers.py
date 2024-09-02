@@ -40,11 +40,11 @@ class SpikeAct_kt(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         input, k, t = ctx.saved_tensors
-        grad_o = grad_output.clone()
-        hu = torch.abs(input - Vth) < aa
-        hu = hu.float() / (2 * aa)
+        #grad_o = grad_output.clone()
+        #hu = torch.abs(input - Vth) < aa
+        #hu = hu.float() / (2 * aa)
         grad_input = 0.5 * t * (1 - torch.pow(torch.tanh((input - Vth) * t), 2))
-        return grad_o * hu, None, None
+        #return grad_o * hu, None, None
         return grad_input * grad_output, None, None
 
 spikeAct = SpikeAct.apply
@@ -63,9 +63,11 @@ def state_update_loss(u_t_n1, o_t_n1, W_mul_o_t1_n):
     o_t1_n1 = spikeAct(u_t1_n1)
     return u_t1_n1, o_t1_n1, u_t1_n1
 
-def state_update_loss_kt(u_t_n1, o_t_n1, W_mul_o_t1_n,k,t):
+def state_update_loss_kt(u_t_n1, o_t_n1, W_mul_o_t1_n,k,t, debug=False):
     u_t1_n1 = tau * u_t_n1 * (1 - o_t_n1) + W_mul_o_t1_n
     o_t1_n1 = spikeAct_kt(u_t1_n1,k,t)
+    if(debug):
+        print((u_t1_n1[0] - u_t1_n1[1]).abs().mean(), u_t1_n1[0].abs().mean(), (o_t1_n1[0] - o_t1_n1[1]).abs().sum())
     return u_t1_n1, o_t1_n1, u_t1_n1
 
 
@@ -94,9 +96,9 @@ class tdLayer_loss(nn.Module):
         self.bn = bn
 
     def forward(self, x):
-        x_ = torch.zeros(self.layer(x[0][..., 0]).shape + (steps,), device=x.device)
+        x_ = torch.zeros(self.layer(x[..., 0]).shape + (steps,), device=x.device)
         for step in range(steps):
-            x_[..., step] = self.layer(x[0][..., step])
+            x_[..., step] = self.layer(x[..., step])
 
         if self.bn is not None:
             x_ = self.bn(x_)
@@ -137,21 +139,24 @@ class LIFSpike_loss_kt(nn.Module):
     #"""
     def __init__(self):
         super(LIFSpike_loss_kt, self).__init__()
-        self.k = torch.tensor([1]).float()
-        self.t = torch.tensor([1]).float()
+        self.k = torch.tensor([5]).float()
+        self.t = torch.tensor([10]).float()
         
-    def forward(self, x):
+    def forward(self, x, debug=False):
         device_x = x.device
         u = torch.zeros(x.shape[:-1] , device=x.device)
         u_pre = torch.zeros(x.shape , device=x.device)
         out = torch.zeros(x.shape, device=x.device)
         for step in range(steps):
-            u, out[..., step], u_pre[..., step] = state_update_loss_kt(u, out[..., max(step-1, 0)], x[..., step], self.k.to(device_x), self.t.to(device_x))
+            u, out[..., step], u_pre[..., step] = state_update_loss_kt(u, out[..., max(step-1, 0)], x[..., step], self.k.to(device_x), self.t.to(device_x), debug=debug)
+
+        if(debug):
+            print((u_pre[0] - u_pre[1]).abs().sum(), (out[0] - out[1]).abs().sum(), (x[0] - x[1]).abs().sum(), out.abs().sum())
         loss = distrloss_layer(u_pre)
         return out, loss
     
     
-class tdBatchNorm(nn.BatchNorm3d):
+class tdBatchNorm(nn.BatchNorm3d): # TODO MAKE TDBN FOR LINEAR AS WELL # TODO MAKE TDBN FOR LINEAR AS WELL # TODO MAKE TDBN FOR LINEAR AS WELL # TODO MAKE TDBN FOR LINEAR AS WELL
     def __init__(self, num_features, eps=1e-05, momentum=0.1, alpha=1, affine=True, track_running_stats=True):
         super(tdBatchNorm, self).__init__(
              num_features, eps, momentum, affine, track_running_stats)

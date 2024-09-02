@@ -101,7 +101,7 @@ class ResNet(nn.Module):
         
         #self.fc1 = nn.Linear(512 * 16 * block.expansion, 256)
         self.fc1 = nn.Linear(512 * 16, 256)
-        self.fc1_s = tdLayer(self.fc1)
+        self.fc1_s = tdLayer(self.fc1, nn.BatchNorm1d(256))
         self.fc2 = nn.Linear(256, 10)
         self.fc2_s = tdLayer(self.fc2)
         self.spike = LIFSpike_loss_kt()
@@ -174,7 +174,9 @@ class ResNet(nn.Module):
         x = self.avgpool(tmp)
         x = x.view(x.shape[0], -1, x.shape[4])
         x = self.fc1_s(x)
+        #print(f"diff: {(x[0] - x[1]).abs().sum()}, shape: {x.shape}")
         x, layer_loss = self.spike(x)
+        #print(f"diff: {(x[0] - x[1]).abs().sum()}, shape: {x.shape} (1)")
         g_loss.append(layer_loss)
         x = self.fc2_s(x) 
         out = torch.sum(x, dim=2) / steps

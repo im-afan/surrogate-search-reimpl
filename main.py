@@ -61,10 +61,13 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             target = F.one_hot(target, num_classes=10).to(torch.float32)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
-            output, dloss = model(data)
+            #print(data.shape, data[0][0][0][0][0], data[0][0][0][0][1], data[1][0][0][0][0], data[1][0][0][0][1])
 
-            #print(output, target)
+            optimizer.zero_grad()
+            output, dloss = model(data)
+            #print(F.softmax(output), target, output.shape)
             train_loss = loss_fn(output, target) + dloss.mean() * args.distrloss # sum up batch loss
+            #train_loss = F.mse_loss(output, target, reduction="mean") + dloss.mean() * args.distrloss # sum up batch loss
             train_loss.backward()
             optimizer.step()
 
@@ -75,7 +78,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 print("loss:", running_loss)
                 running_loss = 0
 
-        test(args, model, device, test_loader, epoch, writer) 
+        #test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
@@ -133,6 +136,7 @@ def main():
     model.to(device)
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    #optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
     #test(args, model, device, test_loader, 0, writer)
