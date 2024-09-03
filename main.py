@@ -65,7 +65,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             optimizer.zero_grad()
             output, mem_out = model(data)
 
-            train_loss = torch.zeros(1)
+            train_loss = torch.zeros(1).to(device)
             for step in range(steps):
                 train_loss += F.cross_entropy(mem_out[..., step], target)
             train_loss.backward()
