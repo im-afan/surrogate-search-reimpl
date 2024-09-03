@@ -114,7 +114,7 @@ class LIFSpike(nn.Module):
         u = torch.zeros(x.shape[:-1] , device=x.device)
         out = torch.zeros(x.shape, device=x.device)
         for step in range(steps):
-            u, out[..., step] = state_update(u, out[..., max(step-1, 0)], x[..., step], self.k.to(device))
+            u, out[..., step] = state_update(u, out[..., max(step-1, 0)], x[..., step], self.k.to(x.device))
         return out
 
 class LIFSpike_loss(nn.Module):
