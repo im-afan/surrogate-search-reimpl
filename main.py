@@ -57,9 +57,6 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
     for epoch_num in range(epoch):
         running_loss = 0
         for batch_idx, (data, target) in enumerate(train_loader):
-            if(batch_idx > 0):
-                break
-
             data, target = data.to(device), target.to(device)
             target = F.one_hot(target, num_classes=10).to(torch.float32)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
@@ -78,7 +75,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 print("loss:", running_loss)
                 running_loss = 0
 
-        #test(args, model, device, test_loader, epoch, writer) 
+        test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
