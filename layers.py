@@ -11,24 +11,23 @@ aa = 0.5
 Vth = 0.5   
 tau = 0.20  
 
-
 class SpikeAct(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input):
-        ctx.save_for_backward(input)
+    def forward(ctx, input, k):
+        ctx.save_for_backward(input, k)
         # if input = u > Vth then output = 1
         output = torch.gt(input, Vth) 
         return output.float()
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, = ctx.saved_tensors 
+        input, k = ctx.saved_tensors 
         grad_input = grad_output.clone()
         # hu is an approximate func of df/du
         #hu = abs(input-Vth) < aa
         #hu = hu.float() / (2 * aa)
-        grad = 0.5 * (1 - torch.pow(torch.tanh((input - Vth)), 2)) * grad_input
-        return grad
+        grad = 0.5 * k * (1 - torch.pow(torch.tanh((input - Vth) * k), 2)) * grad_input
+        return grad, None
 
 class SpikeAct_kt(torch.autograd.Function):
     @staticmethod
@@ -52,9 +51,9 @@ spikeAct_kt = SpikeAct_kt.apply
 distrloss_layer = Distrloss_layer()
 
 
-def state_update(u_t_n1, o_t_n1, W_mul_o_t1_n):
+def state_update(u_t_n1, o_t_n1, W_mul_o_t1_n, k):
     u_t1_n1 = tau * u_t_n1 * (1 - o_t_n1) + W_mul_o_t1_n
-    o_t1_n1 = spikeAct(u_t1_n1)
+    o_t1_n1 = spikeAct(u_t1_n1, k)
     return u_t1_n1, o_t1_n1
 
 
@@ -109,12 +108,13 @@ class LIFSpike(nn.Module):
 
     def __init__(self):
         super(LIFSpike, self).__init__()
+        self.k = torch.tensor([10]).float()
 
     def forward(self, x):
         u = torch.zeros(x.shape[:-1] , device=x.device)
         out = torch.zeros(x.shape, device=x.device)
         for step in range(steps):
-            u, out[..., step] = state_update(u, out[..., max(step-1, 0)], x[..., step])
+            u, out[..., step] = state_update(u, out[..., max(step-1, 0)], x[..., step], self.k)
         return out
 
 class LIFSpike_loss(nn.Module):

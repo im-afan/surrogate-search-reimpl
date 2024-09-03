@@ -29,7 +29,7 @@ def test(args, model, device, test_loader, epoch, writer):
             data, target = data.to(device), target.to(device)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
-            output = model(data)
+            output, _ = model(data)
             test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -63,8 +63,11 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             data = data.permute(1, 2, 3, 4, 0)
 
             optimizer.zero_grad()
-            output = model(data)
-            train_loss = loss_fn(output, target) # sum up batch loss
+            output, mem_out = model(data)
+
+            train_loss = torch.zeros(1)
+            for step in range(steps):
+                train_loss += F.cross_entropy(mem_out[..., step], target)
             train_loss.backward()
             optimizer.step()
 

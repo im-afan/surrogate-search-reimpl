@@ -41,7 +41,8 @@ class VGG(nn.Module):
         x = x.view(x.shape[0], -1, x.shape[4])
         x = self.classifier(x)
         out = torch.sum(x, dim=2) / steps
-        return out
+
+        return out, x
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
