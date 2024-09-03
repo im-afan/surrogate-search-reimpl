@@ -13,7 +13,6 @@ tau = 0.20
 
 
 class SpikeAct(torch.autograd.Function):
-
     @staticmethod
     def forward(ctx, input):
         ctx.save_for_backward(input)
@@ -26,11 +25,12 @@ class SpikeAct(torch.autograd.Function):
         input, = ctx.saved_tensors 
         grad_input = grad_output.clone()
         # hu is an approximate func of df/du
-        hu = abs(input-Vth) < aa
-        hu = hu.float() / (2 * aa)
-        return grad_input * hu
-class SpikeAct_kt(torch.autograd.Function):
+        #hu = abs(input-Vth) < aa
+        #hu = hu.float() / (2 * aa)
+        grad = 0.5 * (1 - torch.pow(torch.tanh((input - Vth)), 2)) * grad_input
+        return grad
 
+class SpikeAct_kt(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, k, t):
         ctx.save_for_backward(input, k, t)

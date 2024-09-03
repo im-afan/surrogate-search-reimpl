@@ -55,20 +55,19 @@ def test(args, model, device, test_loader, epoch, writer):
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn):
     for epoch_num in range(epoch):
-        #set_kt(model, torch.tensor([5]).float(), torch.tensor([10]))
         running_loss = 0
         for batch_idx, (data, target) in enumerate(train_loader):
+            if(batch_idx > 0):
+                break
+
             data, target = data.to(device), target.to(device)
             target = F.one_hot(target, num_classes=10).to(torch.float32)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
-            #print(data.shape, data[0][0][0][0][0], data[0][0][0][0][1], data[1][0][0][0][0], data[1][0][0][0][1])
 
             optimizer.zero_grad()
             output = model(data)
-            #print(F.softmax(output), target, output.shape)
             train_loss = loss_fn(output, target) # sum up batch loss
-            #train_loss = F.mse_loss(output, target, reduction="mean") + dloss.mean() * args.distrloss # sum up batch loss
             train_loss.backward()
             optimizer.step()
 
@@ -79,7 +78,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 print("loss:", running_loss)
                 running_loss = 0
 
-        test(args, model, device, test_loader, epoch, writer) 
+        #test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
@@ -123,7 +122,7 @@ def main():
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+        batch_size=args.batch_size, shuffle=False, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('./data', train=False, 
                         transform=transforms.Compose([
