@@ -108,7 +108,7 @@ class LIFSpike(nn.Module):
 
     def __init__(self):
         super(LIFSpike, self).__init__()
-        self.k = torch.tensor([10]).float()
+        self.k = torch.tensor([1]).float()
 
     def forward(self, x):
         u = torch.zeros(x.shape[:-1] , device=x.device)
