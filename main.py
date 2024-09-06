@@ -30,7 +30,7 @@ def test(args, model, device, test_loader, epoch, writer):
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
             output, output_sum = model(data)
-            test_loss += F.cross_entropy(output_sum, target, reduction='sum').item() # sum up batch loss
+            #test_loss += F.cross_entropy(output_sum, target, reduction='sum').item() # sum up batch loss
             pred = output_sum.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
         if best_acc < 100. * correct / len(test_loader.dataset):
