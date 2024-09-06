@@ -42,7 +42,7 @@ class VGG(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.shape[0], -1, x.shape[4])
         x = self.classifier(x)
-        out = torch.sum(x, dim=2) / steps
+        out = torch.mean(x, dim=2) / steps
 
         return out, x
 
