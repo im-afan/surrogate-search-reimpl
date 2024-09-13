@@ -16,6 +16,17 @@ best_acc=0
 best_epoch=0
 model_save_path = 'checkpoint/' + 'resnet19'
 
+def set_surrogate(model: nn.Module, k: torch.Tensor):
+    for name, child_module in model.named_children():
+        if(isinstance(child_module, LIFSpike_loss_kt)):
+            child_module.t = k
+        set_surrogate(child_module, k)
+
+def sample_surrogate(logits: torch.Tensor):
+    dist = torch.distributions.Categorical(logits)
+    k = dist.sample()
+    return k
+
 def test(args, model, device, test_loader, epoch, writer):
     model.eval()
     test_loss = 0
@@ -29,7 +40,7 @@ def test(args, model, device, test_loader, epoch, writer):
             data, target = data.to(device), target.to(device)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
-            output, _ = model(data)
+            output, _, _ = model(data)
             test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -53,9 +64,11 @@ def test(args, model, device, test_loader, epoch, writer):
         100. * correct / len(test_loader.dataset)))
 
 
-def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn):
+def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
     for epoch_num in range(epoch):
         running_loss = 0
+        prev_loss, prev_log_prob = None, None
+        dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
             target = F.one_hot(target, num_classes=10).to(torch.float32)
@@ -63,17 +76,23 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             data = data.permute(1, 2, 3, 4, 0)
 
             optimizer.zero_grad()
-            output, mem_out = model(data)
+            output, mem_out, k_logits = model(data)
 
-            #train_loss = torch.zeros(1).to(device)
-            #for step in range(steps):
-            #train_loss += F.cross_entropy(mem_out[..., step], target)
-            #    train_loss += loss_fn(mem_out[..., step], target)
-            train_loss = loss_fn(output, target)
+            k, log_prob = sample_surrogate(k_logits)
+            set_surrogate(model, k)
+
+            train_loss = loss_fn(output, target) + args.distrloss * dist_loss
             train_loss.backward()
             optimizer.step()
 
             running_loss += train_loss.detach().item() 
+
+            if(prev_loss is not None):
+                loss_chg = train_loss.detach() - prev_loss.detach()
+                dist_loss = loss_chg * prev_log_prob # todo maximum entropy
+
+            prev_loss = train_loss
+            prev_log_prob = log_prob
 
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
@@ -142,6 +161,7 @@ def main():
     model.to(device)
     print('success')
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    dist_optimizer = optim.SGD(model.surrogate_pred.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
     train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn)
