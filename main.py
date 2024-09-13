@@ -23,9 +23,9 @@ def set_surrogate(model: nn.Module, k: torch.Tensor):
         set_surrogate(child_module, k)
 
 def sample_surrogate(logits: torch.Tensor):
-    dist = torch.distributions.Categorical(logits)
+    dist = torch.distributions.Categorical(logits=logits)
     k = dist.sample()
-    return k
+    return k, dist.log_prob(k)
 
 def test(args, model, device, test_loader, epoch, writer):
     model.eval()
@@ -67,7 +67,7 @@ def test(args, model, device, test_loader, epoch, writer):
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
     for epoch_num in range(epoch):
         running_loss = 0
-        prev_loss, prev_log_prob = None, None
+        prev_loss, prev_k = None, None
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
@@ -78,21 +78,29 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             optimizer.zero_grad()
             output, mem_out, k_logits = model(data)
 
-            k, log_prob = sample_surrogate(k_logits)
+            k_logits = k_logits.detach()
+            dist = torch.distributions.Categorical(logits=k_logits) 
+            #print(dist.probs)
+            #print(k_logits)
+            k = dist.sample().detach()
             set_surrogate(model, k)
 
-            train_loss = loss_fn(output, target) + args.distrloss * dist_loss
+            #print(loss_fn(output, target), dist_loss)
+            model_loss = loss_fn(output, target)
+            dist_loss = args.distrloss * dist_loss
+            train_loss = model_loss + dist_loss 
             train_loss.backward()
             optimizer.step()
 
-            running_loss += train_loss.detach().item() 
+            running_loss += model_loss.detach().item() 
 
             if(prev_loss is not None):
-                loss_chg = train_loss.detach() - prev_loss.detach()
-                dist_loss = loss_chg * prev_log_prob # todo maximum entropy
+                loss_chg = model_loss.detach() - prev_loss.detach()
+                #print("loss chg: ", loss_chg.item(), "distloss: ", torch.sum(dist.log_prob(prev_k)))
+                dist_loss = loss_chg * torch.sum(dist.log_prob(prev_k))
 
-            prev_loss = train_loss
-            prev_log_prob = log_prob
+            prev_loss = model_loss 
+            prev_k = k.detach()
 
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
