@@ -67,7 +67,7 @@ def test(args, model, device, test_loader, epoch, writer):
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
     for epoch_num in range(epoch):
         running_loss, running_loss_dist = 0, 0
-        prev_loss, prev_k = None, None
+        prev_loss, prev_k, prev_log_prob = None, None, None
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
@@ -96,10 +96,12 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
                 #print("loss chg: ", loss_chg.item(), "distloss: ", torch.sum(dist.log_prob(prev_k)))
-                dist_loss = loss_chg * torch.mean(dist.log_prob(prev_k))
+                #dist_loss = loss_chg * torch.mean(dist.log_prob(prev_k))
+                dist_loss = loss_chg * torch.mean(prev_log_prob)
 
             prev_loss = model_loss 
             prev_k = k.detach()
+            prev_log_prob = dist.log_prob(k)
 
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
