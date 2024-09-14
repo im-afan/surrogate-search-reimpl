@@ -66,7 +66,8 @@ def test(args, model, device, test_loader, epoch, writer):
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
     for epoch_num in range(epoch):
-        running_loss, running_loss_dist = 0, 0
+        cnt = 0
+        running_loss, running_loss_dist, running_k = 0, 0, 0
         prev_loss, prev_k, prev_log_prob = None, None, None
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -80,7 +81,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             k_logits = k_logits.detach()
             dist = torch.distributions.Categorical(logits=k_logits)
-            k = dist.sample().detach()
+            k = dist.sample().detach().to(torch.float32)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
@@ -92,6 +93,8 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             running_loss += model_loss.detach().item() 
             running_loss_dist += dist_loss.detach().item()
+            running_k += (k.sum() / k.shape[0]).item()
+            cnt += 1
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
@@ -104,12 +107,19 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             prev_log_prob = dist.log_prob(k)
 
             if(batch_idx % args.log_interval == 0):
+                running_loss /= cnt
+                running_loss_dist /= cnt
+                running_k /= cnt
                 writer.add_scalar("train/loss", running_loss)
                 writer.add_scalar("train/dist_loss", running_loss_dist)
+                writer.add_scalar("train/k", running_k)
                 print("loss:", running_loss)
                 print("dist_loss:", running_loss_dist)
+                print("k:", running_k)
                 running_loss = 0
                 running_loss_dist = 0
+                running_k = 0
+                cnt = 0
 
         test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
