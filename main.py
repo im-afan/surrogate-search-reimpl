@@ -66,7 +66,7 @@ def test(args, model, device, test_loader, epoch, writer):
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
     for epoch_num in range(epoch):
-        running_loss = 0
+        running_loss, running_loss_dist = 0, 0
         prev_loss, prev_k = None, None
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -79,33 +79,35 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             output, mem_out, k_logits = model(data)
 
             k_logits = k_logits.detach()
-            dist = torch.distributions.Categorical(logits=k_logits) 
-            #print(dist.probs)
-            #print(k_logits)
+            dist = torch.distributions.Categorical(logits=k_logits)
             k = dist.sample().detach()
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
             model_loss = loss_fn(output, target)
             dist_loss = args.distrloss * dist_loss
-            train_loss = model_loss + dist_loss 
+            train_loss = model_loss + dist_loss.to(device)
             train_loss.backward()
             optimizer.step()
 
             running_loss += model_loss.detach().item() 
+            running_loss_dist += dist_loss.detach().item()
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
                 #print("loss chg: ", loss_chg.item(), "distloss: ", torch.sum(dist.log_prob(prev_k)))
-                dist_loss = loss_chg * torch.sum(dist.log_prob(prev_k))
+                dist_loss = loss_chg * torch.mean(dist.log_prob(prev_k))
 
             prev_loss = model_loss 
             prev_k = k.detach()
 
             if(batch_idx % args.log_interval == 0):
                 writer.add_scalar("train/loss", running_loss)
+                writer.add_scalar("train/dist_loss", running_loss_dist)
                 print("loss:", running_loss)
+                print("dist_loss:", running_loss_dist)
                 running_loss = 0
+                running_loss_dist = 0
 
         test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()

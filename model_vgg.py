@@ -14,7 +14,7 @@ class VGG(nn.Module):
         super().__init__()
         self.features = features
         self.avgpool = tdLayer(nn.AdaptiveAvgPool2d((7, 7)))
-        """self.classifier = nn.Sequential(
+        self.classifier = nn.Sequential(
             tdLayer(nn.Linear(512*7*7, 4096), nn.BatchNorm1d(4096)),
             LIFSpike(),
             nn.Dropout(p=dropout),
@@ -22,8 +22,8 @@ class VGG(nn.Module):
             LIFSpike(),
             nn.Dropout(p=dropout),
             tdLayer(nn.Linear(4096, num_classes)),
-        )"""
-        self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
+        )
+        #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
         self.surrogate_pred = nn.Linear(512*7*7, 10) #decide whether to use categoriacl or normal
         if init_weights:
             for m in self.modules():
@@ -44,7 +44,6 @@ class VGG(nn.Module):
         x = self.avgpool(x)
         features = x.view(x.shape[0], -1, x.shape[4])
         features_sum = torch.sum(features, dim=2) / steps
-        print(features_sum.shape)
         x = self.classifier(features)
         k_logits = self.surrogate_pred(features_sum)
         out = torch.sum(x, dim=2) / steps
