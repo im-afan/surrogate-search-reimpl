@@ -64,7 +64,7 @@ def test(args, model, device, test_loader, epoch, writer):
         100. * correct / len(test_loader.dataset)))
 
 
-def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer=None):
+def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer):
     for epoch_num in range(epoch):
         cnt = 0
         running_loss, running_loss_dist, running_k = 0, 0, 0
@@ -77,19 +77,24 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             data = data.permute(1, 2, 3, 4, 0)
 
             optimizer.zero_grad()
+            dist_optimizer.zero_grad()
             output, mem_out, k_logits = model(data)
 
-            k_logits = k_logits.detach()
+            k_logits = k_logits
             dist = torch.distributions.Categorical(logits=k_logits)
             k = dist.sample().detach().to(torch.float32)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
             model_loss = loss_fn(output, target)
-            dist_loss = args.distrloss * dist_loss
-            train_loss = model_loss + dist_loss.to(device)
+            train_loss = model_loss
             train_loss.backward()
             optimizer.step()
+
+            if(dist_loss.item() > 0):
+                dist_loss = args.distrloss * dist_loss
+                dist_loss.backward()
+                dist_optimizer.step()
 
             running_loss += model_loss.detach().item() 
             running_loss_dist += dist_loss.detach().item()
@@ -185,8 +190,9 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     dist_optimizer = optim.SGD(model.surrogate_pred.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
+    dist_scheduler = optim.lr_scheduler.CosineAnnealingLR(dist_optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
-    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn)
+    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn, dist_optimizer)
     writer.close()
 
     
