@@ -45,7 +45,7 @@ class VGG(nn.Module):
         features = x.view(x.shape[0], -1, x.shape[4])
         features_sum = torch.sum(features, dim=2) / steps
         x = self.classifier(features)
-        k_logits = self.surrogate_pred(features_sum)
+        k_logits = self.surrogate_pred(features_sum.detach())
         out = torch.sum(x, dim=2) / steps
 
         return out, x, k_logits 

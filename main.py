@@ -12,6 +12,7 @@ from model import *
 from model_vgg import *
 from tensorboardX import SummaryWriter
 
+torch.autograd.set_detect_anomaly(True)
 best_acc=0
 best_epoch=0
 model_save_path = 'checkpoint/' + 'resnet19'
@@ -80,21 +81,15 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             dist_optimizer.zero_grad()
             output, mem_out, k_logits = model(data)
 
-            k_logits = k_logits
             dist = torch.distributions.Categorical(logits=k_logits)
             k = dist.sample().detach().to(torch.float32)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
             model_loss = loss_fn(output, target)
-            train_loss = model_loss
+            train_loss = model_loss# + dist_loss 
             train_loss.backward()
             optimizer.step()
-
-            if(dist_loss.item() > 0):
-                dist_loss = args.distrloss * dist_loss
-                dist_loss.backward()
-                dist_optimizer.step()
 
             running_loss += model_loss.detach().item() 
             running_loss_dist += dist_loss.detach().item()
@@ -103,9 +98,9 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
-                #print("loss chg: ", loss_chg.item(), "distloss: ", torch.sum(dist.log_prob(prev_k)))
-                #dist_loss = loss_chg * torch.mean(dist.log_prob(prev_k))
                 dist_loss = loss_chg * torch.mean(prev_log_prob)
+                dist_loss.backward()
+                dist_optimizer.step()
 
             prev_loss = model_loss 
             prev_k = k.detach()
@@ -187,8 +182,19 @@ def main():
         model = vgg16_bn()
     model.to(device)
     print('success')
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
-    dist_optimizer = optim.SGD(model.surrogate_pred.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+
+    model_params = []
+    dist_params = []
+    for name, param in model.named_parameters():
+        if(name.startswith("surrogate_pred")):
+            print("surrogate", name)
+            dist_params.append(param)
+        else:
+            print("model", name)
+            model_params.append(param)
+
+    optimizer = optim.SGD(model_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    dist_optimizer = optim.SGD(dist_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     dist_scheduler = optim.lr_scheduler.CosineAnnealingLR(dist_optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
