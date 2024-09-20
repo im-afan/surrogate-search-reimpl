@@ -83,7 +83,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             dist = torch.distributions.LogNormal(loc=theta[..., 0], scale=torch.exp(theta[..., 1]))
             k = dist.sample().detach().to(torch.float32)
-            print(theta.shape, k.shape, k)
+            #print(theta.shape, k.shape, k)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
@@ -150,7 +150,7 @@ def main():
                         help='weight of distrloss')
     parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
-    parser.add_argument('--k_entropy', default=0.1, type=float,
+    parser.add_argument('--k-entropy', default=0.1, type=float,
                         help='how much to factor entropy in dist_loss')
     args = parser.parse_args()
 
