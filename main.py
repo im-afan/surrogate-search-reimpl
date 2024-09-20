@@ -65,11 +65,11 @@ def test(args, model, device, test_loader, epoch, writer):
         100. * correct / len(test_loader.dataset)))
 
 
-def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer):
+def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer, dist_params):
     for epoch_num in range(epoch):
         cnt = 0
         running_loss, running_loss_dist, running_k = 0, 0, 0
-        prev_loss, prev_k, prev_log_prob = None, None, None
+        prev_loss, prev_k, prev_log_prob, prev_entropy = None, None, None, None
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
@@ -98,13 +98,18 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
-                dist_loss = loss_chg * torch.mean(prev_log_prob)
+                #print("log prob and entropy: ", torch.mean(prev_log_prob).item(), torch.mean(prev_entropy).item())
+                #print(torch.exp(k_logits))
+                #print(k_logits)
+                dist_loss = loss_chg * torch.mean(prev_log_prob) - args.k_entropy * torch.mean(prev_entropy) # maximum entropy -> minimum -entropy
                 dist_loss.backward()
+                nn.utils.clip_grad_norm_(dist_params, 0.1)
                 dist_optimizer.step()
 
             prev_loss = model_loss 
             prev_k = k.detach()
             prev_log_prob = dist.log_prob(k)
+            prev_entropy = dist.entropy()
 
             if(batch_idx % args.log_interval == 0):
                 running_loss /= cnt
@@ -144,8 +149,8 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=50, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--distrloss', default=2.0, type=float,
-                        help='weight of distrloss')
+    parser.add_argument('--k-entropy', default=1, type=float,
+                        help='weight of entropy')
     parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
     args = parser.parse_args()
@@ -198,7 +203,7 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     dist_scheduler = optim.lr_scheduler.CosineAnnealingLR(dist_optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()
-    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn, dist_optimizer)
+    train(args, model, device, train_loader, test_loader, args.epochs, writer, optimizer, scheduler, loss_fn, dist_optimizer, dist_params)
     writer.close()
 
     

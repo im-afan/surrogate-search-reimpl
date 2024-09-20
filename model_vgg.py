@@ -24,7 +24,10 @@ class VGG(nn.Module):
             tdLayer(nn.Linear(4096, num_classes)),
         )
         #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
-        self.surrogate_pred = nn.Linear(512*7*7, 10) #decide whether to use categoriacl or normal
+        self.surrogate_pred = nn.Sequential(
+            nn.Sigmoid(),
+            nn.Linear(512*7*7, 10) #decide whether to use categoriacl or normal
+        )
         if init_weights:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
@@ -52,6 +55,7 @@ class VGG(nn.Module):
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
+
     layers: List[nn.Module] = []
     in_channels = 3
     for v in cfg:
