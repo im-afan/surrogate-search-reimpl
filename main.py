@@ -79,10 +79,11 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             optimizer.zero_grad()
             dist_optimizer.zero_grad()
-            output, mem_out, k_logits = model(data)
+            output, mem_out, theta = model(data)
 
-            dist = torch.distributions.Categorical(logits=k_logits)
+            dist = torch.distributions.LogNormal(loc=theta[..., 0], scale=torch.exp(theta[..., 1]))
             k = dist.sample().detach().to(torch.float32)
+            print(theta.shape, k.shape, k)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
@@ -98,13 +99,14 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
-                dist_loss = loss_chg * torch.mean(prev_log_prob)
+                dist_loss = loss_chg * torch.mean(prev_log_prob) - args.k_entropy * torch.mean(prev_entropy) #maximize entropy => minimize -entropy
                 dist_loss.backward()
                 dist_optimizer.step()
 
             prev_loss = model_loss 
             prev_k = k.detach()
             prev_log_prob = dist.log_prob(k)
+            prev_entropy = dist.entropy()
 
             if(batch_idx % args.log_interval == 0):
                 running_loss /= cnt
@@ -148,6 +150,8 @@ def main():
                         help='weight of distrloss')
     parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
+    parser.add_argument('--k_entropy', default=0.1, type=float,
+                        help='how much to factor entropy in dist_loss')
     args = parser.parse_args()
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -186,8 +190,8 @@ def main():
     model_params = []
     dist_params = []
     for name, param in model.named_parameters():
-        if(name.startswith("surrogate_pred")):
-            print("surrogate", name)
+        if(name.startswith("theta")):
+            print("theta", name)
             dist_params.append(param)
         else:
             print("model", name)

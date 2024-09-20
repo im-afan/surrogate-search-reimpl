@@ -12,6 +12,7 @@ class VGG(nn.Module):
         self, features: nn.Module, num_classes: int = 10, init_weights: bool = True, dropout: float = 0
     ) -> None:
         super().__init__()
+        self.theta = nn.Parameter(torch.tensor([1, 1]).to(dtype=torch.float32))
         self.features = features
         self.avgpool = tdLayer(nn.AdaptiveAvgPool2d((7, 7)))
         self.classifier = nn.Sequential(
@@ -24,7 +25,6 @@ class VGG(nn.Module):
             tdLayer(nn.Linear(4096, num_classes)),
         )
         #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
-        self.surrogate_pred = nn.Linear(512*7*7, 10) #decide whether to use categoriacl or normal
         if init_weights:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
@@ -43,12 +43,12 @@ class VGG(nn.Module):
         x = self.features(x)
         x = self.avgpool(x)
         features = x.view(x.shape[0], -1, x.shape[4])
-        features_sum = torch.sum(features, dim=2) / steps
+        #features_sum = torch.sum(features, dim=2) / steps
         x = self.classifier(features)
-        k_logits = self.surrogate_pred(features_sum.detach())
+        #k_logits = self.surrogate_pred(features_sum.detach())
         out = torch.sum(x, dim=2) / steps
 
-        return out, x, k_logits 
+        return out, x, self.theta.repeat(x.shape[0], 1)
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
