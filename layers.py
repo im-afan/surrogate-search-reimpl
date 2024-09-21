@@ -26,6 +26,11 @@ class SpikeAct(torch.autograd.Function):
         # hu is an approximate func of df/du
         #hu = abs(input-Vth) < aa
         #hu = hu.float() / (2 * aa)
+        #print("K:   ", k)
+        #print(k.shape, (input - Vth).shape, grad_input.shape)
+        #print((input-Vth) * k)
+        k = k.view(-1, *([1] * (grad_input.dim())))
+        #print(k)
         grad = 0.5 * k * (1 - torch.pow(torch.tanh((input - Vth) * k), 2)) * grad_input
         return grad, None
 

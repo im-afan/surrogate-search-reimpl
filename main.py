@@ -19,8 +19,11 @@ model_save_path = 'checkpoint/' + 'resnet19'
 
 def set_surrogate(model: nn.Module, k: torch.Tensor):
     for name, child_module in model.named_children():
-        if(isinstance(child_module, LIFSpike_loss_kt)):
-            child_module.t = k
+        #print(type(child_module))
+        if(isinstance(child_module, LIFSpike)):
+            #print("set surrogate ", name)
+            #child_module.t = k
+            child_module.k = k
         set_surrogate(child_module, k)
 
 def sample_surrogate(logits: torch.Tensor):
@@ -121,12 +124,15 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 print("loss:", running_loss)
                 print("dist_loss:", running_loss_dist)
                 print("k:", running_k)
+                print(F.softmax(k_logits[0]))
                 running_loss = 0
                 running_loss_dist = 0
                 running_k = 0
                 cnt = 0
 
-        test(args, model, device, test_loader, epoch, writer) 
+            #break
+
+        #test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
@@ -170,7 +176,7 @@ def main():
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+        batch_size=args.batch_size, shuffle=False, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('./data', train=False, 
                         transform=transforms.Compose([
