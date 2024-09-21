@@ -83,7 +83,6 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             dist = torch.distributions.LogNormal(loc=theta[..., 0], scale=torch.exp(theta[..., 1]))
             k = dist.sample().detach().to(torch.float32)
-            #print(theta.shape, k.shape, k)
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
@@ -115,6 +114,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 writer.add_scalar("train/loss", running_loss)
                 writer.add_scalar("train/dist_loss", running_loss_dist)
                 writer.add_scalar("train/k", running_k)
+                print(theta[0])
                 print("loss:", running_loss)
                 print("dist_loss:", running_loss_dist)
                 print("k:", running_k)
@@ -198,7 +198,8 @@ def main():
             model_params.append(param)
 
     optimizer = optim.SGD(model_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
-    dist_optimizer = optim.SGD(dist_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    #dist_optimizer = optim.SGD(dist_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    dist_optimizer = optim.Adam(dist_params, lr=args.lr)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     dist_scheduler = optim.lr_scheduler.CosineAnnealingLR(dist_optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()

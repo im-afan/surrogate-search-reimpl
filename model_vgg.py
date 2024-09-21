@@ -12,7 +12,7 @@ class VGG(nn.Module):
         self, features: nn.Module, num_classes: int = 10, init_weights: bool = True, dropout: float = 0
     ) -> None:
         super().__init__()
-        self.theta = nn.Parameter(torch.tensor([1, 1]).to(dtype=torch.float32))
+        self.theta = nn.Parameter(torch.tensor([0, 0.1]).to(dtype=torch.float32))
         self.features = features
         self.avgpool = tdLayer(nn.AdaptiveAvgPool2d((7, 7)))
         self.classifier = nn.Sequential(
