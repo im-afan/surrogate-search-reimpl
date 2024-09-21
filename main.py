@@ -103,7 +103,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 #print(k_logits)
                 dist_loss = loss_chg * torch.mean(prev_log_prob) - args.k_entropy * torch.mean(prev_entropy) # maximum entropy -> minimum -entropy
                 dist_loss.backward()
-                nn.utils.clip_grad_norm_(dist_params, 0.1)
+                #nn.utils.clip_grad_norm_(dist_params, 0.1)
                 dist_optimizer.step()
 
             prev_loss = model_loss 
