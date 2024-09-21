@@ -199,7 +199,7 @@ def main():
             model_params.append(param)
 
     optimizer = optim.SGD(model_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
-    dist_optimizer = optim.SGD(dist_params, lr=args.lr, momentum=args.momentum, weight_decay=1e-4)
+    dist_optimizer = optim.Adam(dist_params, lr=args.lr)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
     dist_scheduler = optim.lr_scheduler.CosineAnnealingLR(dist_optimizer, eta_min=0, T_max=args.epochs)
     loss_fn = nn.CrossEntropyLoss()

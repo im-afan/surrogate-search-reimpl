@@ -25,9 +25,11 @@ class VGG(nn.Module):
         )
         #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
         self.surrogate_pred = nn.Sequential(
-            nn.Sigmoid(),
-            nn.Linear(512*7*7, 10) #decide whether to use categoriacl or normal
-        )
+            nn.Linear(512*7*7, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, 10),
+        ) #decide whether to use categoriacl or normal
         if init_weights:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
