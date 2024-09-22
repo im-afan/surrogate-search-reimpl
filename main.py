@@ -157,7 +157,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             #break
 
-        #test(args, model, device, test_loader, epoch, writer) 
+        test(args, model, device, test_loader, epoch, writer) 
         scheduler.step()
 
 def main():
