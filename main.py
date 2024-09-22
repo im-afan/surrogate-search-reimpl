@@ -149,6 +149,9 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 writer.add_scalar("train/k", running_k)
                 print("loss:", running_loss)
                 print("dist_loss:", running_loss_dist)
+                for name in dist_param:
+                    theta = dist_param[name]
+                    print(name, theta)
                 #print("k:", running_k)
                 running_loss = 0
                 running_loss_dist = 0
