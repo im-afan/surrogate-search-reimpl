@@ -107,7 +107,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
             for name in dist_param:
                 theta = dist_param[name]
                 #print(name, theta)
-                dist[name] = torch.distributions.LogNormal(loc=theta[0], scale=theta[1])
+                dist[name] = torch.distributions.LogNormal(loc=theta[0], scale=torch.exp(theta[1]))
                 k[name] = dist[name].sample().detach()
 
 
