@@ -29,7 +29,7 @@ class SpikeAct(torch.autograd.Function):
         #print("K:   ", k)
         #print(k.shape, (input - Vth).shape, grad_input.shape)
         #print((input-Vth) * k)
-        k = k.view(-1, *([1] * (grad_input.dim())))
+        #print(k)
         #print(k)
         grad = 0.5 * k * (1 - torch.pow(torch.tanh((input - Vth) * k), 2)) * grad_input
         return grad, None

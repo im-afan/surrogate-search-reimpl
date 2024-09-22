@@ -24,14 +24,15 @@ class VGG(nn.Module):
             tdLayer(nn.Linear(4096, num_classes)),
         )
         #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
-        self.surrogate_pred = nn.Sequential(
+        """self.surrogate_pred = nn.Sequential(
             nn.Linear(512*7*7, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(512, 10),
-        ) #decide whether to use categoriacl or normal
+        ) #decide whether to use categoriacl or normal"""
+        self.surrogate = {}
         if init_weights:
-            for m in self.modules():
+            for name, m in self.named_modules():
                 if isinstance(m, nn.Conv2d):
                     n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                     m.weight.data.normal_(0, math.sqrt(2. / n))
@@ -42,18 +43,21 @@ class VGG(nn.Module):
                     n = m.weight.size(1)
                     m.weight.data.normal_(0, 1.0 / float(n))
                     m.bias.data.zero_()
+                elif isinstance(m, LIFSpike):
+                    print(name)
+                    name_ = name.replace(".", "-")
+                    self.surrogate[name_] = nn.Parameter(torch.tensor([0, 0.1]).to(dtype=torch.float32), requires_grad=True)
+        self.surrogate = nn.ParameterDict(self.surrogate)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
         x = self.avgpool(x)
-        features = x.view(x.shape[0], -1, x.shape[4])
-        features_sum = torch.sum(features, dim=2) / steps
-        x = self.classifier(features)
-        k_logits = self.surrogate_pred(features_sum.detach())
+        x = x.view(x.shape[0], -1, x.shape[4])
+        x = self.classifier(x)
         out = torch.sum(x, dim=2) / steps
 
-        return out, x, k_logits 
+        return out, x, self.surrogate
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:

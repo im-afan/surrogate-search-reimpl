@@ -18,18 +18,35 @@ best_epoch=0
 model_save_path = 'checkpoint/' + 'resnet19'
 
 def set_surrogate(model: nn.Module, k: torch.Tensor):
-    for name, child_module in model.named_children():
+    """for name, child_module in model.named_children():
         #print(type(child_module))
         if(isinstance(child_module, LIFSpike)):
             #print("set surrogate ", name)
             #child_module.t = k
             child_module.k = k
-        set_surrogate(child_module, k)
+        set_surrogate(child_module, k)"""
+    
+    for name, module in model.named_modules():
+        if(isinstance(module, LIFSpike)):
+            #print(name)
+            name_ = name.replace(".", "-")
+            module.k = k[name_]
 
-def sample_surrogate(logits: torch.Tensor):
-    dist = torch.distributions.Categorical(logits=logits)
-    k = dist.sample()
-    return k, dist.log_prob(k)
+def sample_surrogate(dist_param: nn.ParameterDict, device):
+    dist = {}
+    k = {}
+    log_prob = torch.zeros(1).to(dtype=torch.float32).to(device)
+    entropy = torch.zeros(1).to(dtype=torch.float32).to(device)
+    for name in dist_param:
+        theta = dist_param[name]
+        dist[name] = torch.distributions.LogNormal(loc=theta[0], scale=theta[1])
+        k[name] = dist[name].sample().detach()
+        log_prob += dist[name].log_prob(k[name])
+        entropy += dist[name].entropy()
+
+    return k, log_prob, entropy
+
+    
 
 def test(args, model, device, test_loader, epoch, writer):
     model.eval()
@@ -82,10 +99,18 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             optimizer.zero_grad()
             dist_optimizer.zero_grad()
-            output, mem_out, k_logits = model(data)
+            output, mem_out, dist_param = model(data)
 
-            dist = torch.distributions.Categorical(logits=k_logits)
-            k = dist.sample().detach().to(torch.float32)
+            #k, log_prob, entropy = sample_surrogate(k_logits, device)
+            dist = {}
+            k = {}
+            for name in dist_param:
+                theta = dist_param[name]
+                #print(name, theta)
+                dist[name] = torch.distributions.LogNormal(loc=theta[0], scale=theta[1])
+                k[name] = dist[name].sample().detach()
+
+
             set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
@@ -96,23 +121,24 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
             running_loss += model_loss.detach().item() 
             running_loss_dist += dist_loss.detach().item()
-            running_k += (k.sum() / k.shape[0]).item()
+            #running_k += (k.sum() / k.shape[0]).item()
             cnt += 1
 
             if(prev_loss is not None):
                 loss_chg = model_loss.detach() - prev_loss.detach()
-                #print("log prob and entropy: ", torch.mean(prev_log_prob).item(), torch.mean(prev_entropy).item())
-                #print(torch.exp(k_logits))
-                #print(k_logits)
                 dist_loss = loss_chg * torch.mean(prev_log_prob) - args.k_entropy * torch.mean(prev_entropy) # maximum entropy -> minimum -entropy
+                #dist_loss = loss_chg * torch.mean(prev_log_prob)
                 dist_loss.backward()
-                #nn.utils.clip_grad_norm_(dist_params, 0.1)
                 dist_optimizer.step()
 
             prev_loss = model_loss 
-            prev_k = k.detach()
-            prev_log_prob = dist.log_prob(k)
-            prev_entropy = dist.entropy()
+            prev_k = k
+            prev_log_prob = torch.zeros(1, device=device, dtype=torch.float32) 
+            prev_entropy = torch.zeros(1, device=device, dtype=torch.float32)
+            for name in dist_param:
+                prev_log_prob = prev_log_prob + dist[name].log_prob(k[name])
+                prev_entropy = prev_entropy + dist[name].entropy()
+             
 
             if(batch_idx % args.log_interval == 0):
                 running_loss /= cnt
@@ -123,8 +149,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 writer.add_scalar("train/k", running_k)
                 print("loss:", running_loss)
                 print("dist_loss:", running_loss_dist)
-                print("k:", running_k)
-                print(F.softmax(k_logits[0]))
+                #print("k:", running_k)
                 running_loss = 0
                 running_loss_dist = 0
                 running_k = 0
@@ -197,7 +222,7 @@ def main():
     model_params = []
     dist_params = []
     for name, param in model.named_parameters():
-        if(name.startswith("surrogate_pred")):
+        if(name.startswith("surrogate")):
             print("surrogate", name)
             dist_params.append(param)
         else:
