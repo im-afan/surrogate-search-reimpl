@@ -111,7 +111,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 k[name] = dist[name].sample().detach()
 
 
-            set_surrogate(model, k)
+            #set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
             model_loss = loss_fn(output, target)
@@ -204,7 +204,7 @@ def main():
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=False, **kwargs)
+        batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('./data', train=False, 
                         transform=transforms.Compose([
