@@ -86,6 +86,10 @@ def test(args, model, device, test_loader, epoch, writer):
 
 
 def train(args, model, device, train_loader, test_loader, epoch, writer, optimizer, scheduler, loss_fn, dist_optimizer, dist_params):
+    if(not args.static_surrogate):
+        print("using dynamic surrogate")
+    else:
+        print("using static surrogate")
     for epoch_num in range(epoch):
         cnt = 0
         running_loss, running_loss_dist, running_k = 0, 0, 0
@@ -111,7 +115,9 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
                 k[name] = dist[name].sample().detach()
 
 
-            set_surrogate(model, k)
+            if(not args.static_surrogate):
+                print("SET SURROGATE")
+                set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)
             model_loss = loss_fn(output, target)
@@ -184,6 +190,8 @@ def main():
                         help='weight of entropy')
     parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
+    parser.add_argument('--static-surrogate', action='store_true', default=False,
+                        help='whether or not to use dynamic surrogate')
     args = parser.parse_args()
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
