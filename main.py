@@ -116,7 +116,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
 
 
             if(not args.static_surrogate):
-                print("SET SURROGATE")
+                #print("SET SURROGATE")
                 set_surrogate(model, k)
 
             #print(loss_fn(output, target), dist_loss)

@@ -46,7 +46,7 @@ class VGG(nn.Module):
                 elif isinstance(m, LIFSpike):
                     print(name)
                     name_ = name.replace(".", "-")
-                    self.surrogate[name_] = nn.Parameter(torch.tensor([0, 0.1]).to(dtype=torch.float32), requires_grad=True)
+                    self.surrogate[name_] = nn.Parameter(torch.tensor([0, -2]).to(dtype=torch.float32), requires_grad=True)
         self.surrogate = nn.ParameterDict(self.surrogate)
 
 
