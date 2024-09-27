@@ -13,15 +13,18 @@ class VGG(nn.Module):
     ) -> None:
         super().__init__()
         self.features = features
-        self.avgpool = tdLayer(nn.AdaptiveAvgPool2d((7, 7)))
+        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        self.flatten = nn.Flatten()
         self.classifier = nn.Sequential(
-            tdLayer(nn.Linear(512*7*7, 4096), nn.BatchNorm1d(4096)),
-            LIFSpike(),
+            QuantLinear(nn.Linear(512*7*7, 4096)),
+            nn.BatchNorm1d(4096),
+            nn.ReLU(),
             nn.Dropout(p=dropout),
-            tdLayer(nn.Linear(4096, 4096), nn.BatchNorm1d(4096)),
-            LIFSpike(),
+            QuantLinear(nn.Linear(4096, 4096)),
+            nn.BatchNorm1d(4096),
+            nn.ReLU(),
             nn.Dropout(p=dropout),
-            tdLayer(nn.Linear(4096, num_classes)),
+            QuantLinear(nn.Linear(4096, num_classes)),
         )
         #self.classifier = tdLayer(nn.Linear(512*7*7, num_classes))
         """self.surrogate_pred = nn.Sequential(
@@ -36,14 +39,16 @@ class VGG(nn.Module):
                 if isinstance(m, nn.Conv2d):
                     n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                     m.weight.data.normal_(0, math.sqrt(2. / n))
-                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d, tdBatchNorm)):
+                elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
                     nn.init.constant_(m.weight, 1)
                     nn.init.constant_(m.bias, 0)
                 elif isinstance(m, nn.Linear):
                     n = m.weight.size(1)
                     m.weight.data.normal_(0, 1.0 / float(n))
                     m.bias.data.zero_()
-                elif isinstance(m, LIFSpike):
+
+            for name, m in self.named_modules():
+                if isinstance(m, (QuantConv2d, QuantLinear)):
                     print(name)
                     name_ = name.replace(".", "-")
                     self.surrogate[name_] = nn.Parameter(torch.tensor([0, -2]).to(dtype=torch.float32), requires_grad=True)
@@ -53,11 +58,10 @@ class VGG(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
         x = self.avgpool(x)
-        x = x.view(x.shape[0], -1, x.shape[4])
+        x = self.flatten(x)
         x = self.classifier(x)
-        out = torch.sum(x, dim=2) / steps
 
-        return out, x, self.surrogate
+        return x, self.surrogate
 
 
 def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
@@ -66,14 +70,14 @@ def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequ
     in_channels = 3
     for v in cfg:
         if v == "M":
-            layers += [tdLayer(nn.MaxPool2d(kernel_size=2, stride=2))]
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
         else:
             v = cast(int, v)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            conv2d = QuantConv2d(nn.Conv2d(in_channels, v, kernel_size=3, padding=1))
             if batch_norm:
-                layers += [tdLayer(conv2d, tdBatchNorm(v)), LIFSpike()]
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU()]
             else:
-                layers += [tdLayer(conv2d), LIFSpike()]
+                layers += [conv2d, nn.ReLU()]
             in_channels = v
     return nn.Sequential(*layers)
 

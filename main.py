@@ -27,7 +27,7 @@ def set_surrogate(model: nn.Module, k: torch.Tensor):
         set_surrogate(child_module, k)"""
     
     for name, module in model.named_modules():
-        if(isinstance(module, LIFSpike)):
+        if(isinstance(module, (QuantConv2d, QuantLinear))):
             #print(name)
             name_ = name.replace(".", "-")
             module.k = k[name_]
@@ -59,8 +59,6 @@ def test(args, model, device, test_loader, epoch, writer):
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
-            data = data.permute(1, 2, 3, 4, 0)
             output, _, _ = model(data)
             test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -98,12 +96,10 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
             target = F.one_hot(target, num_classes=10).to(torch.float32)
-            data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
-            data = data.permute(1, 2, 3, 4, 0)
 
             optimizer.zero_grad()
             dist_optimizer.zero_grad()
-            output, mem_out, dist_param = model(data)
+            output, dist_param = model(data)
 
             #k, log_prob, entropy = sample_surrogate(k_logits, device)
             dist = {}
