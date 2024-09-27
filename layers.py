@@ -23,18 +23,15 @@ quantize = Quantize.apply
 class QuantConv2d(nn.Module):
     def __init__(self, m: nn.Module):
         self.__dict__ = m.__dict__.copy()
-        self.k_w = torch.ones(1)
-        self.k_a = torch.ones(1)
+        self.k = torch.ones(1)
 
     def forward(self, x: torch.Tensor):
-        x_b = quantize(x, self.k_a)
+        x_b = quantize(x, self.k.to(x.device))
 
         bias_b = None
         if(self.bias is not None):
-            bias_b = quantize(self.bias, self.k_w)
-        else:
-            bias_b = self.bias
-        weight_b = quantize(self.weight, self.k_w)
+            bias_b = quantize(self.bias, self.k.to(x.device))
+        weight_b = quantize(self.weight, self.k.to(x.device))
 
         return F.conv2d(
             x_b, weight_b, bias_b, self.stride, self.padding, self.dilation, self.groups
@@ -43,16 +40,15 @@ class QuantConv2d(nn.Module):
 class QuantLinear(nn.Module):
     def __init__(self, m: nn.Module):
         self.__dict__ = m.__dict__.copy()
-        self.k_w = torch.ones(1)
-        self.k_a = torch.ones(1)
+        self.k = torch.ones(1)
 
     def forward(self, x: torch.Tensor):
-        x_b = quantize(x, self.k_a)
+        x_b = quantize(x, self.k.to(x.device))
 
         bias_b = None
         if(self.bias is not None):
-            bias_b = quantize(self.bias, self.k_w)
-        weight_b = quantize(self.weight, self.k_w)
+            bias_b = quantize(self.bias, self.k.to(x.device))
+        weight_b = quantize(self.weight, self.k.to(x.device))
 
         return F.linear(
             x_b, weight_b, bias_b
