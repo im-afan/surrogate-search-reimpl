@@ -97,7 +97,7 @@ def train(args, model, device, train_loader, test_loader, epoch, writer, optimiz
         dist_loss = torch.zeros(1)
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
-            target = F.one_hot(target, num_classes=10).to(torch.float32)
+            target = F.one_hot(target, num_classes=100).to(torch.float32)
             data, _ = torch.broadcast_tensors(data, torch.zeros((steps,) + data.shape))
             data = data.permute(1, 2, 3, 4, 0)
 
@@ -200,21 +200,26 @@ def main():
     device = torch.device("cuda:0" if use_cuda else "cpu")
     kwargs = {'num_workers': 0, 'pin_memory': True} if use_cuda else {}
     writer = SummaryWriter('./summaries/Cifarnet')
+
+    CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
+    CIFAR100_STD = (0.2675, 0.2565, 0.2761)
+    CIFAR10_MEAN = (0.5071, 0.4867, 0.4408)
+    CIFAR10_STD = (0.2023, 0.1994, 0.2010)
     
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('./data', train=True, download=True,
+        datasets.CIFAR100('./data', train=True, download=True,
                          transform=transforms.Compose([
                              transforms.RandomHorizontalFlip(),
                              transforms.RandomCrop(32, padding=4),
                              transforms.ToTensor(),
-                             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+                             transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD)
                          ])),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('./data', train=False, 
+        datasets.CIFAR100('./data', train=False, 
                         transform=transforms.Compose([
                             transforms.ToTensor(),
-                            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+                            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD)
                         ])),
         batch_size=args.test_batch_size, shuffle=True, **kwargs)
 

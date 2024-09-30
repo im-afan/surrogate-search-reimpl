@@ -9,7 +9,7 @@ import math
 
 class VGG(nn.Module):
     def __init__(
-        self, features: nn.Module, num_classes: int = 10, init_weights: bool = True, dropout: float = 0
+        self, features: nn.Module, num_classes: int = 100, init_weights: bool = True, dropout: float = 0
     ) -> None:
         super().__init__()
         self.features = features
