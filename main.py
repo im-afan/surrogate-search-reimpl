@@ -17,7 +17,7 @@ parser.add_argument('--epochs', default=200, type=int, metavar='N', help='number
 parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch number for resume models')
 parser.add_argument('-b', '--batch_size', default=64, type=int, metavar='N', help='number of batch size')
 parser.add_argument('--seed', default=1000, type=int, help='seed')
-parser.add_argument('-T', '--time', default=6, type=int, metavar='N', help='inference time-step')
+parser.add_argument('-T', '--time', default=2, type=int, metavar='N', help='inference time-step')
 parser.add_argument('-out_dir', default='./logs/', type=str, help='log dir')
 parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume from checkpoint')
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    train_dataset, val_dataset = dataloader.Cifar10()
+    train_dataset, val_dataset = dataloader.Cifar10(download=True)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True)
