@@ -32,10 +32,12 @@ class LIF(nn.Module):
         self.gamma_theta = nn.Parameter(torch.tensor([0.0, -1.0]))
 
     def forward(self, x):
+        #self.gamma_theta = self.gamma_theta.to(x.device)
+        #print(self.gamma_theta)
         dist = torch.distributions.LogNormal(loc=self.gamma_theta[0], scale=torch.exp(self.gamma_theta[1]))
         mem_v = []
         mem = 0
-        self.log_prob = torch.zeros(1) # multiply probs -> add log probs
+        self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         T = x.shape[1]
         for t in range(T):
             gamma = dist.sample().detach()
@@ -240,7 +242,7 @@ class VGG9(nn.Module):
         x = torch.flatten(x, 2)
         x = self.fc2(self.fc1(x))
 
-        log_prob = torch.zeros(1)
+        log_prob = torch.zeros(1).to(x.device)
         for m in self.modules():
             if isinstance(m, LIF):
                 log_prob += m.log_prob 

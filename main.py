@@ -32,7 +32,7 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
     total = 0
     correct = 0
     prev_loss, prev_log_prob = None, None
-    dist_loss = torch.zeros(1)
+    dist_loss = torch.zeros(1).to(device)
     for i, (images, labels) in enumerate(train_loader):
         optimizer.zero_grad()
         labels = labels.to(device)
@@ -156,4 +156,3 @@ if __name__ == '__main__':
         if save_max:
             torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_max.pth'))
         torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_latest.pth'))
-
