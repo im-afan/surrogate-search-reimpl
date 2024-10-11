@@ -24,12 +24,13 @@ class SG(torch.autograd.Function):
 
 
 class LIF(nn.Module):
-    def __init__(self, v_th=1.0, tau=0.25, gamma=1.0):
+    def __init__(self, v_th=1.0, tau=0.25, gamma=1.0, static=False):
         super(LIF, self).__init__()
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
         self.gamma_theta = nn.Parameter(torch.tensor([0.0, -1.0]))
+        self.static = static
 
     def forward(self, x):
         #self.gamma_theta = self.gamma_theta.to(x.device)
@@ -40,8 +41,11 @@ class LIF(nn.Module):
         self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         T = x.shape[1]
         for t in range(T):
-            gamma = dist.sample().detach()
-            self.log_prob += dist.log_prob(gamma)
+            if(self.static):
+                gamma = dist.sample().detach()
+                self.log_prob += dist.log_prob(gamma)
+            else:
+                gamma = torch.exp(self.gamma_theta[0])
             mem = self.tau * mem + x[:, t, ...]
             spike = self.heaviside(mem - self.v_th, gamma)
             mem = mem * (1 - spike)
@@ -204,28 +208,28 @@ class ResNet(nn.Module):
 
 
 class VGG9(nn.Module):
-    def __init__(self, tau=0.25):
+    def __init__(self, tau=0.25, static=False):
         super(VGG9, self).__init__()
         self.tau = tau
         pool = SeqToANNContainer(nn.AvgPool2d(2))
         self.voting = VotingLayer(10)
         self.features = nn.Sequential(
             TEBNLayer(3, 64, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             TEBNLayer(64, 64, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             pool,
             TEBNLayer(64, 128, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             TEBNLayer(128, 128, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             pool,
             TEBNLayer(128, 256, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau),
+            LIF(tau=self.tau, static=static),
             pool,
 
         )

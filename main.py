@@ -23,6 +23,7 @@ parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
 parser.add_argument('-k_dist', type=float, default=0.01, help='weight of distloss in loss calculation')
+parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
 
 args = parser.parse_args()
 
@@ -98,7 +99,7 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers, pin_memory=True)
 
-    model = VGG9(tau=args.tau)
+    model = VGG9(tau=args.tau, static=args.static_surrogate)
 
     model = torch.nn.DataParallel(model)
     model.to(device)
