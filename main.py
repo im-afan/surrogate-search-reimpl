@@ -52,8 +52,8 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
         prev_loss = loss.detach()
         prev_log_prob = log_prob
 
-        print(model_loss.item(), dist_loss.item())
-        print("step done")
+        #print(model_loss.item(), dist_loss.item())
+        #print("step done")
 
         total += float(labels.size(0))
         _, predicted = mean_out.cpu().max(1)
