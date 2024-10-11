@@ -22,6 +22,7 @@ parser.add_argument('-out_dir', default='./logs/', type=str, help='log dir')
 parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume from checkpoint')
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
+parser.add_argument('-k_dist', type=float, default=0.01, help='weight of distloss in loss calculation')
 
 args = parser.parse_args()
 
@@ -37,8 +38,9 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
         labels = labels.to(device)
         images = images.to(device)
         outputs, log_prob = model(images)
-        mean_out = outputs.mean(1) + dist_loss
-        loss = criterion(mean_out, labels)
+        mean_out = outputs.mean(1)
+        model_loss = criterion(mean_out, labels)
+        loss = model_loss + args.k_dist * dist_loss
         running_loss += loss.item()
         loss.mean().backward()
         optimizer.step()
@@ -50,6 +52,7 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
         prev_loss = loss.detach()
         prev_log_prob = log_prob
 
+        print(model_loss.item(), dist_loss.item())
         print("step done")
 
         total += float(labels.size(0))
@@ -109,12 +112,15 @@ if __name__ == '__main__':
     out_dir = os.path.join(args.out_dir, f'method_{args.method}_tau_{args.tau}_T_{args.time}')
 
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cuda')
-        model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        scheduler.load_state_dict(checkpoint['scheduler'])
-        start_epoch = checkpoint['epoch'] + 1
-        best_acc = checkpoint['best_acc']
+        try:
+            checkpoint = torch.load(args.resume, map_location='cuda')
+            model.load_state_dict(checkpoint['model'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
+            start_epoch = checkpoint['epoch'] + 1
+            best_acc = checkpoint['best_acc']
+        except:
+            pass
 
     best_acc = 0
     best_epoch = 0
