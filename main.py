@@ -24,7 +24,7 @@ parser.add_argument('-out_dir', default='./logs/', type=str, help='log dir')
 parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume from checkpoint')
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
-parser.add_argument('-k_dist', type=float, default=0.01, help='weight of distloss in loss calculation')
+parser.add_argument('-k_dist', type=float, default=1, help='weight of distloss in loss calculation')
 parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
 parser.add_argument('-loss_chg_discount', default=0.9)
 
