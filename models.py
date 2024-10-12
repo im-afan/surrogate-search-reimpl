@@ -41,9 +41,10 @@ class LIF(nn.Module):
         self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         T = x.shape[1]
         for t in range(T):
-            if(self.static):
+            if(not self.static):
                 gamma = dist.sample().detach()
                 self.log_prob += dist.log_prob(gamma)
+                #print("dynamic", gamma)
             else:
                 gamma = torch.exp(self.gamma_theta[0])
             #print("gamma: ", gamma)
