@@ -18,7 +18,7 @@ class SG(torch.autograd.Function):
         (input, out, others) = ctx.saved_tensors
         gamma = others[0].item()
         grad_input = grad_output.clone()
-        tmp = (1 / gamma) * (1 / gamma) * ((gamma - input.abs()).clamp(min=0))
+        tmp = (gamma) * (gamma) * ((1/gamma - input.abs()).clamp(min=0))
         grad_input = grad_input * tmp
         return grad_input, None
 
