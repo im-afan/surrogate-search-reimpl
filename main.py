@@ -42,16 +42,17 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
         images = images.to(device)
         outputs, log_prob = model(images)
         mean_out = outputs.mean(1)
-        model_loss = criterion(mean_out, labels)
+        model_loss = criterion(mean_out, labels).mean()
         loss = model_loss + args.k_dist * dist_loss
         running_loss += loss.item()
-        loss.mean().backward()
+        loss.backward()
         optimizer.step()
 
         if(prev_loss is not None):
             loss_chg = loss.detach() - prev_loss
             advantage = loss_chg - running_loss_chg
             dist_loss = advantage * prev_log_prob # divide running_loss_chg by 2 bcuz 
+            print(prev_log_prob)
             #print(advantage, loss_chg, running_loss_chg)
             running_loss_chg = loss_chg * (1 - args.loss_chg_discount) + running_loss_chg * args.loss_chg_discount
 

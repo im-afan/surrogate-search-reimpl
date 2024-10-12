@@ -29,13 +29,19 @@ class LIF(nn.Module):
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
-        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -3.0]))
         self.static = static
+        self.surrogate_pred = nn.Sequential( # input: (25th, 50th, 75th quantiles of activations) TODO: also try weights?
+            nn.Linear(3, 10),                 # output: (proposed gamma mean, proposed gamma std)
+            nn.ReLU(),
+            nn.Linear(10, 2)
+        )
 
     def forward(self, x):
         #self.gamma_theta = self.gamma_theta.to(x.device)
         #print(self.gamma_theta)
-        dist = torch.distributions.LogNormal(loc=self.gamma_theta[0], scale=torch.exp(self.gamma_theta[1]))
+        quants = x.quantile(torch.tensor([0.25, 0.5, 0.75], device=x.device)).detach()
+        theta = self.surrogate_pred(quants)
+        dist = torch.distributions.Normal(loc=theta[0], scale=torch.exp(theta[1]))
         mem_v = []
         mem = 0
         self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
@@ -44,10 +50,10 @@ class LIF(nn.Module):
             if(not self.static):
                 gamma = dist.sample().detach()
                 self.log_prob += dist.log_prob(gamma)
-                #print("dynamic", gamma)
+                print("dynamic", gamma)
             else:
                 gamma = torch.exp(self.gamma_theta[0])
-                print("static", gamma)
+                #print("static", gamma)
             #print("gamma: ", gamma)
             mem = self.tau * mem + x[:, t, ...]
             spike = self.heaviside(mem - self.v_th, gamma)
