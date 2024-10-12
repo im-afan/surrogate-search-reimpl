@@ -29,7 +29,7 @@ class LIF(nn.Module):
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
-        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -1.0]))
+        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -3.0]))
         self.static = static
 
     def forward(self, x):
@@ -46,6 +46,7 @@ class LIF(nn.Module):
                 self.log_prob += dist.log_prob(gamma)
             else:
                 gamma = torch.exp(self.gamma_theta[0])
+            #print("gamma: ", gamma)
             mem = self.tau * mem + x[:, t, ...]
             spike = self.heaviside(mem - self.v_th, gamma)
             mem = mem * (1 - spike)

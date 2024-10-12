@@ -99,7 +99,7 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
                                               shuffle=False, num_workers=args.workers, pin_memory=True)
 
-    model = VGG9(tau=args.tau, static=args.static_surrogate)
+    model = VGG9(tau=args.tau, static=(not args.static_surrogate))
 
     model = torch.nn.DataParallel(model)
     model.to(device)
