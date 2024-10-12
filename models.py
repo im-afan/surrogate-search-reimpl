@@ -47,6 +47,7 @@ class LIF(nn.Module):
                 #print("dynamic", gamma)
             else:
                 gamma = torch.exp(self.gamma_theta[0])
+                print("static", gamma)
             #print("gamma: ", gamma)
             mem = self.tau * mem + x[:, t, ...]
             spike = self.heaviside(mem - self.v_th, gamma)

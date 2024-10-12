@@ -24,11 +24,13 @@ parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
 parser.add_argument('-k_dist', type=float, default=0.01, help='weight of distloss in loss calculation')
 parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
+parser.add_argument('-loss_chg_discount', default=0.9)
 
 args = parser.parse_args()
 
 def train(model, device, train_loader, criterion, optimizer, epoch, args):
     running_loss = 0
+    running_loss_chg = 0
     model.train()
     total = 0
     correct = 0
@@ -48,7 +50,10 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
 
         if(prev_loss is not None):
             loss_chg = loss.detach() - prev_loss
-            dist_loss = loss_chg * prev_log_prob
+            advantage = loss_chg - running_loss_chg
+            dist_loss = advantage * prev_log_prob # divide running_loss_chg by 2 bcuz 
+            #print(advantage, loss_chg, running_loss_chg)
+            running_loss_chg = loss_chg * (1 - args.loss_chg_discount) + running_loss_chg * args.loss_chg_discount
 
         prev_loss = loss.detach()
         prev_log_prob = log_prob
