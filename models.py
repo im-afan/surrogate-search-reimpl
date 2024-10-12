@@ -121,7 +121,7 @@ class SpikeModule(nn.Module):
     def forward(self, input):
         std_mean = torch.std_mean(self.layer.fwd.module.weight)
         y = self.layer(input)
-        y = self.spk(input, std_mean)
+        y = self.spk(y, std_mean)
         return y
 
 
