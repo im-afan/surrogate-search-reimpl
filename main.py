@@ -52,9 +52,10 @@ def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epo
         model_loss.backward()
         optimizer.step()
 
-        dist_loss = args.k_dist * model_loss.detach() * log_prob
-        dist_loss.backward()
-        dist_optimizer.step()
+        if(prev_loss is not None):
+            dist_loss = args.k_dist * (model_loss.detach() - prev_loss) * log_prob
+            dist_loss.backward()
+            dist_optimizer.step()
 
         prev_loss = model_loss.detach()
         prev_log_prob = log_prob
