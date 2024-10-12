@@ -36,18 +36,15 @@ class LIF(nn.Module):
             nn.Linear(10, 2)
         )"""
         self.surrogate_pred = nn.Sequential(
-            nn.Linear(3, 10),
+            nn.Linear(2, 10),
             nn.ReLU(),
             nn.Linear(10, 2)
         )
 
-    def forward(self, x):
-        quants = x.quantile(torch.tensor([0.25, 0.5, 0.75], device=x.device)).view(1, 3).detach()
-        #theta = self.surrogate_pred(quants)
-        theta = self.surrogate_pred(quants)
-
+    def forward(self, x, std_mean):
+        theta = self.surrogate_pred(torch.tensor(std_mean, device=x.device).detach())
         theta = theta.view(2)
-        #theta = self.theta + x.detach().quantile(torch.tensor([0.5, 0.7], device=x.device))
+        print(theta)
         dist = torch.distributions.LogNormal(loc=theta[0], scale=torch.exp(theta[1]))
         mem_v = []
         mem = 0
@@ -65,7 +62,7 @@ class LIF(nn.Module):
             spike = self.heaviside(mem - self.v_th, gamma)
             mem = mem * (1 - spike)
             mem_v.append(spike)
-        print("log prob: ", self.log_prob)
+        #print("log prob: ", self.log_prob)
         return torch.stack(mem_v, dim=1)
 
 
@@ -112,6 +109,19 @@ class TEBNLayer(nn.Module):
     def forward(self, input):
         y = self.fwd(input)
         y = self.bn(y)
+        return y
+
+
+class SpikeModule(nn.Module):
+    def __init__(self, layer: TEBNLayer, spk: LIF):
+        super().__init__()
+        self.layer = layer
+        self.spk = spk
+
+    def forward(self, input):
+        std_mean = torch.std_mean(self.layer.fwd.module.weight)
+        y = self.layer(input)
+        y = self.spk(input, std_mean)
         return y
 
 
@@ -230,22 +240,36 @@ class VGG9(nn.Module):
         pool = SeqToANNContainer(nn.AvgPool2d(2))
         self.voting = VotingLayer(10)
         self.features = nn.Sequential(
-            TEBNLayer(3, 64, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(64, 64, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
+            SpikeModule(
+                TEBNLayer(3, 64, 3, 1, 1),
+                LIF(tau=self.tau, static=static)
+            ),
+            SpikeModule(
+                TEBNLayer(64, 64, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
             pool,
-            TEBNLayer(64, 128, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(128, 128, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
+            SpikeModule(
+                TEBNLayer(64, 128, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
+            SpikeModule(
+                TEBNLayer(128, 128, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
             pool,
-            TEBNLayer(128, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
+            SpikeModule(
+                TEBNLayer(128, 256, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
+            SpikeModule(
+                TEBNLayer(256, 256, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
+            SpikeModule(
+                TEBNLayer(256, 256, 3, 1, 1),
+                LIF(tau=self.tau, static=static),
+            ),
             pool,
 
         )
