@@ -30,7 +30,7 @@ class LIF(nn.Module):
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
-        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -1.0]))
+        self.gamma_theta = nn.Parameter(torch.tensor([1, -1.0]))
         self.static = static
         self.gamma = None
 
@@ -43,13 +43,14 @@ class LIF(nn.Module):
         mem = 0
         #self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         T = x.shape[1]
+        self.log_prob = torch.zeros(1, device=x.device)
         if(not self.static):
-            if(self.gamma is None):
-                self.gamma = dist.sample().detach()
-                self.log_prob = dist.log_prob(self.gamma)
-                print("dynamic", self.gamma)
+            #if(self.gamma is None):
+            self.gamma = dist.sample().detach()
+            self.log_prob += dist.log_prob(self.gamma)
+            print("dynamic", self.gamma)
         else:
-            self.gamma = torch.exp(self.gamma_theta[0])
+            self.gamma = 1
             print("static", self.gamma)
         for t in range(T):
             #print("gamma: ", gamma)
