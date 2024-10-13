@@ -19,14 +19,14 @@ parser.add_argument('--epochs', default=200, type=int, metavar='N', help='number
 parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch number for resume models')
 parser.add_argument('-b', '--batch_size', default=64, type=int, metavar='N', help='number of batch size')
 parser.add_argument('--seed', default=1000, type=int, help='seed')
-parser.add_argument('-T', '--time', default=2, type=int, metavar='N', help='inference time-step')
+parser.add_argument('-T', '--time', default=4, type=int, metavar='N', help='inference time-step')
 parser.add_argument('-out_dir', default='./logs/', type=str, help='log dir')
 parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume from checkpoint')
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
 parser.add_argument('-k_dist', type=float, default=10, help='weight of distloss in loss calculation')
 parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
-parser.add_argument('-loss_chg_discount', default=0.9)
+parser.add_argument('-loss_chg_discount', default=0.5)
 parser.add_argument('-update-dist-freq', default=1000)
 
 args = parser.parse_args()
@@ -37,8 +37,8 @@ def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epo
     model.train()
     total = 0
     correct = 0
-    prev_loss, prev_log_prob = None, None
     dist_loss = torch.zeros(1).to(device)
+    loss_chgs, log_probs = [], []
     for i, (images, labels) in enumerate(train_loader):
         optimizer.zero_grad()
         dist_optimizer.zero_grad()
@@ -58,9 +58,15 @@ def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epo
                 new_outputs, _ = model(images)
                 new_outputs = new_outputs.mean(1)
                 new_loss = criterion(new_outputs, labels).mean().detach()
+            loss_chgs.append(new_loss - model.loss.item())
+            log_probs.append(log_prob)
             print(f"old loss {model_loss.item()} new loss {new_loss.item()}")
-            if(not args.static_surrogate): 
-                dist_loss = args.k_dist * (new_loss - model_loss.detach()) * log_prob
+            if(not args.static_surrogate and len(log_probs) == 5): 
+                dist_loss = torch.zeros(1, device=device)
+                reward = 0
+                for i in range(len(log_probs)-1, -1, -1):
+                    reward += loss_chgs[i] + reward * args.loss_chg_discount
+                    dist_loss += args.k_dist * reward * log_prob
                 dist_loss.backward()
                 dist_optimizer.step()
 

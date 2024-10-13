@@ -30,34 +30,42 @@ class LIF(nn.Module):
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
-        self.gamma_theta = nn.Parameter(torch.tensor([1, -1.0]))
         self.static = static
-        self.gamma = None
+        """self.surrogate_pred = nn.Sequential( # input: (25th, 50th, 75th quantiles of activations) TODO: also try weights?
+            nn.Linear(3, 10),                 # output: (proposed gamma mean, proposed gamma std)
+            nn.ReLU(),
+            nn.Linear(10, 2)
+        )"""
+        self.surrogate_pred = nn.Sequential(
+            nn.Linear(2, 10),
+            nn.ReLU(),
+            #nn.Linear(10, 10),
+            #nn.ReLU(),
+            nn.Linear(10, 2)
+        )
 
-    def forward(self, x):
-        self.gamma_theta = self.gamma_theta.to(x.device)
-        print(self.gamma_theta)
-        #print(self.gamma_theta)
-        dist = torch.distributions.Normal(loc=self.gamma_theta[0], scale=torch.exp(self.gamma_theta[1]))
+    def forward(self, x, std_mean):
+        theta = self.surrogate_pred(torch.tensor(std_mean, device=x.device).detach())
+        theta = theta.view(2)
+        print(theta)
+        dist = torch.distributions.Normal(loc=theta[0], scale=torch.exp(theta[1]))
         mem_v = []
         mem = 0
-        #self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
-        T = x.shape[1]
-        self.log_prob = torch.zeros(1, device=x.device)
+        self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         if(not self.static):
-            #if(self.gamma is None):
-            self.gamma = dist.sample().detach()
-            self.log_prob += dist.log_prob(self.gamma)
-            print("dynamic", self.gamma)
+            gamma = dist.sample().detach()
+            self.log_prob += dist.log_prob(gamma)
         else:
-            self.gamma = 1
-            print("static", self.gamma)
+            gamma = torch.exp(self.gamma_theta[0])
+
+        T = x.shape[1]
         for t in range(T):
             #print("gamma: ", gamma)
             mem = self.tau * mem + x[:, t, ...]
-            spike = self.heaviside(mem - self.v_th, self.gamma)
+            spike = self.heaviside(mem - self.v_th, gamma)
             mem = mem * (1 - spike)
             mem_v.append(spike)
+        #print("log prob: ", self.log_prob)
         return torch.stack(mem_v, dim=1)
 
 
@@ -104,6 +112,19 @@ class TEBNLayer(nn.Module):
     def forward(self, input):
         y = self.fwd(input)
         y = self.bn(y)
+        return y
+
+
+class SpikeModule(nn.Module):
+    def __init__(self, layer: TEBNLayer, spk: LIF):
+        super().__init__()
+        self.layer = layer
+        self.spk = spk
+
+    def forward(self, input):
+        std_mean = torch.std_mean(self.layer.fwd.module.weight)
+        y = self.layer(input)
+        y = self.spk(y, std_mean)
         return y
 
 
@@ -215,53 +236,6 @@ class ResNet(nn.Module):
         return self.forward_imp(input)
 
 
-class VGG91(nn.Module):
-    def __init__(self, tau=0.25, static=False):
-        super(VGG91, self).__init__()
-        self.tau = tau
-        pool = SeqToANNContainer(nn.AvgPool2d(2))
-        self.voting = VotingLayer(10)
-        self.features = nn.Sequential(
-            TEBNLayer(3, 64, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(64, 64, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            pool,
-            TEBNLayer(64, 128, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(128, 128, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            pool,
-            TEBNLayer(128, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            TEBNLayer(256, 256, 3, 1, 1),
-            LIF(tau=self.tau, static=static),
-            pool,
-
-        )
-        self.T = 4
-        self.fc1 =  SeqToANNContainer(nn.Dropout(0.25), nn.Linear(256 * 4 * 4, 1024))
-        self.fc2 =  SeqToANNContainer(nn.Dropout(0.25), nn.Linear(1024, 100), self.voting)
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-
-    def forward(self, input):
-        input = input_expand(input, self.T)
-        x = self.features(input)
-        x = torch.flatten(x, 2)
-        x = self.fc2(self.fc1(x))
-
-        log_prob = torch.zeros(1).to(x.device)
-        for m in self.modules():
-            if isinstance(m, LIF):
-                log_prob += m.log_prob 
-
-        return x, log_prob
-
-
 class VGG9(nn.Module):
     def __init__(self, tau=0.25, static=False):
         super(VGG9, self).__init__()
@@ -270,24 +244,16 @@ class VGG9(nn.Module):
         self.voting = VotingLayer(10)
         self.lif = LIF(tau=self.tau, static=static)
         self.features = nn.Sequential(
-            TEBNLayer(3, 64, 3, 1, 1),
-            self.lif,
-            TEBNLayer(64, 64, 3, 1, 1),
-            self.lif,
+            SpikeModule(TEBNLayer(3, 64, 3, 1, 1), self.lif),
+            SpikeModule(TEBNLayer(64, 64, 3, 1, 1), self.lif),
             pool,
-            TEBNLayer(64, 128, 3, 1, 1),
-            self.lif,
-            TEBNLayer(128, 128, 3, 1, 1),
-            self.lif,
+            SpikeModule(TEBNLayer(64, 128, 3, 1, 1), self.lif),
+            SpikeModule(TEBNLayer(128, 128, 3, 1, 1), self.lif),
             pool,
-            TEBNLayer(128, 256, 3, 1, 1),
-            self.lif,
-            TEBNLayer(256, 256, 3, 1, 1),
-            self.lif,
-            TEBNLayer(256, 256, 3, 1, 1),
-            self.lif,
+            SpikeModule(TEBNLayer(128, 256, 3, 1, 1), self.lif),
+            SpikeModule(TEBNLayer(256, 256, 3, 1, 1), self.lif),
+            SpikeModule(TEBNLayer(256, 256, 3, 1, 1), self.lif),
             pool,
-
         )
         self.T = 4
         self.fc1 =  SeqToANNContainer(nn.Dropout(0.25), nn.Linear(256 * 4 * 4, 1024))
@@ -306,5 +272,5 @@ class VGG9(nn.Module):
         for m in self.modules():
             if isinstance(m, LIF):
                 log_prob += m.log_prob 
-        self.lif.gamma = None
+
         return x, log_prob
