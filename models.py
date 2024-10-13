@@ -18,7 +18,8 @@ class SG(torch.autograd.Function):
         (input, out, others) = ctx.saved_tensors
         gamma = others[0].item()
         grad_input = grad_output.clone()
-        tmp = (1 / gamma) * (1 / gamma) * ((gamma - input.abs()).clamp(min=0))
+        #tmp = (gamma) * (gamma) * ((1/gamma - input.abs()).clamp(min=0))
+        tmp = 0.5 * (gamma) * (1 - torch.pow(torch.tanh(input*gamma), 2))
         grad_input = grad_input * tmp
         return grad_input, None
 
@@ -29,28 +30,31 @@ class LIF(nn.Module):
         self.heaviside = SG.apply
         self.v_th = v_th
         self.tau = tau
-        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -3.0]))
+        self.gamma_theta = nn.Parameter(torch.tensor([0.0, -1.0]))
         self.static = static
+        self.gamma = None
 
     def forward(self, x):
-        #self.gamma_theta = self.gamma_theta.to(x.device)
+        self.gamma_theta = self.gamma_theta.to(x.device)
+        print(self.gamma_theta)
         #print(self.gamma_theta)
-        dist = torch.distributions.LogNormal(loc=self.gamma_theta[0], scale=torch.exp(self.gamma_theta[1]))
+        dist = torch.distributions.Normal(loc=self.gamma_theta[0], scale=torch.exp(self.gamma_theta[1]))
         mem_v = []
         mem = 0
-        self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
+        #self.log_prob = torch.zeros(1).to(x.device) # multiply probs -> add log probs
         T = x.shape[1]
+        if(not self.static):
+            if(self.gamma is None):
+                self.gamma = dist.sample().detach()
+                self.log_prob = dist.log_prob(self.gamma)
+                print("dynamic", self.gamma)
+        else:
+            self.gamma = torch.exp(self.gamma_theta[0])
+            print("static", self.gamma)
         for t in range(T):
-            if(not self.static):
-                gamma = dist.sample().detach()
-                self.log_prob += dist.log_prob(gamma)
-                #print("dynamic", gamma)
-            else:
-                gamma = torch.exp(self.gamma_theta[0])
-                print("static", gamma)
             #print("gamma: ", gamma)
             mem = self.tau * mem + x[:, t, ...]
-            spike = self.heaviside(mem - self.v_th, gamma)
+            spike = self.heaviside(mem - self.v_th, self.gamma)
             mem = mem * (1 - spike)
             mem_v.append(spike)
         return torch.stack(mem_v, dim=1)
@@ -210,9 +214,9 @@ class ResNet(nn.Module):
         return self.forward_imp(input)
 
 
-class VGG9(nn.Module):
+class VGG91(nn.Module):
     def __init__(self, tau=0.25, static=False):
-        super(VGG9, self).__init__()
+        super(VGG91, self).__init__()
         self.tau = tau
         pool = SeqToANNContainer(nn.AvgPool2d(2))
         self.voting = VotingLayer(10)
@@ -254,4 +258,52 @@ class VGG9(nn.Module):
             if isinstance(m, LIF):
                 log_prob += m.log_prob 
 
+        return x, log_prob
+
+
+class VGG9(nn.Module):
+    def __init__(self, tau=0.25, static=False):
+        super(VGG9, self).__init__()
+        self.tau = tau
+        pool = SeqToANNContainer(nn.AvgPool2d(2))
+        self.voting = VotingLayer(10)
+        self.lif = LIF(tau=self.tau, static=static)
+        self.features = nn.Sequential(
+            TEBNLayer(3, 64, 3, 1, 1),
+            self.lif,
+            TEBNLayer(64, 64, 3, 1, 1),
+            self.lif,
+            pool,
+            TEBNLayer(64, 128, 3, 1, 1),
+            self.lif,
+            TEBNLayer(128, 128, 3, 1, 1),
+            self.lif,
+            pool,
+            TEBNLayer(128, 256, 3, 1, 1),
+            self.lif,
+            TEBNLayer(256, 256, 3, 1, 1),
+            self.lif,
+            TEBNLayer(256, 256, 3, 1, 1),
+            self.lif,
+            pool,
+
+        )
+        self.T = 4
+        self.fc1 =  SeqToANNContainer(nn.Dropout(0.25), nn.Linear(256 * 4 * 4, 1024))
+        self.fc2 =  SeqToANNContainer(nn.Dropout(0.25), nn.Linear(1024, 100), self.voting)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+    def forward(self, input):
+        input = input_expand(input, self.T)
+        x = self.features(input)
+        x = torch.flatten(x, 2)
+        x = self.fc2(self.fc1(x))
+
+        log_prob = torch.zeros(1).to(x.device)
+        for m in self.modules():
+            if isinstance(m, LIF):
+                log_prob += m.log_prob 
+        self.lif.gamma = None
         return x, log_prob

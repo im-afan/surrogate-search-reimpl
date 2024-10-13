@@ -9,6 +9,8 @@ import random
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
+torch.autograd.set_detect_anomaly(True)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser(description='TEBN')
@@ -22,13 +24,13 @@ parser.add_argument('-out_dir', default='./logs/', type=str, help='log dir')
 parser.add_argument('-resume', default='./TEBN_VGG9.pth', type=str, help='resume from checkpoint')
 parser.add_argument('-method', default='TEBN', type=str, help='BN method')
 parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neuron')
-parser.add_argument('-k_dist', type=float, default=0.01, help='weight of distloss in loss calculation')
+parser.add_argument('-k_dist', type=float, default=1, help='weight of distloss in loss calculation')
 parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
 parser.add_argument('-loss_chg_discount', default=0.9)
 
 args = parser.parse_args()
 
-def train(model, device, train_loader, criterion, optimizer, epoch, args):
+def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epoch, args):
     running_loss = 0
     running_loss_chg = 0
     model.train()
@@ -38,27 +40,27 @@ def train(model, device, train_loader, criterion, optimizer, epoch, args):
     dist_loss = torch.zeros(1).to(device)
     for i, (images, labels) in enumerate(train_loader):
         optimizer.zero_grad()
+        dist_optimizer.zero_grad()
+
         labels = labels.to(device)
         images = images.to(device)
+
         outputs, log_prob = model(images)
         mean_out = outputs.mean(1)
-        model_loss = criterion(mean_out, labels)
-        loss = model_loss + args.k_dist * dist_loss
-        running_loss += loss.item()
-        loss.mean().backward()
+        model_loss = criterion(mean_out, labels).mean()
+        running_loss += model_loss.item()
+        model_loss.backward()
         optimizer.step()
 
         if(prev_loss is not None):
-            loss_chg = loss.detach() - prev_loss
-            advantage = loss_chg - running_loss_chg
-            dist_loss = advantage * prev_log_prob # divide running_loss_chg by 2 bcuz 
-            #print(advantage, loss_chg, running_loss_chg)
-            running_loss_chg = loss_chg * (1 - args.loss_chg_discount) + running_loss_chg * args.loss_chg_discount
+            dist_loss = args.k_dist * (model_loss.detach() - prev_loss) * log_prob
+            dist_loss.backward()
+            dist_optimizer.step()
 
-        prev_loss = loss.detach()
+        prev_loss = model_loss.detach()
         prev_log_prob = log_prob
 
-        #print(model_loss.item(), dist_loss.item())
+        print(model_loss.item(), dist_loss.item())
         #print("step done")
 
         total += float(labels.size(0))
@@ -109,8 +111,17 @@ if __name__ == '__main__':
     model = torch.nn.DataParallel(model)
     model.to(device)
 
+    model_params, dist_params = [], []
+    for name, param in model.named_parameters():
+        if("gamma_theta" not in name):
+            model_params.append(param)
+        else:
+            dist_params.append(param)
+
+
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=0.02, weight_decay=5e-4, momentum=0.9)
+    optimizer = optim.SGD(model_params, lr=0.02, weight_decay=5e-4, momentum=0.9)
+    dist_optimizer = optim.SGD(dist_params, lr=0.1, momentum=0.2)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
 
     start_epoch = 0
@@ -135,7 +146,7 @@ if __name__ == '__main__':
 
     for epoch in range(start_epoch, args.epochs):
 
-        loss, acc = train(model, device, train_loader, criterion, optimizer, epoch, args)
+        loss, acc = train(model, device, train_loader, criterion, optimizer, dist_optimizer, epoch, args)
         print('Epoch {}/{} train loss={:.5f} train acc={:.3f}'.format(epoch, args.epochs, loss, acc))
         writer.add_scalar('train_loss', loss, epoch)
         writer.add_scalar('train_acc', acc, epoch)
@@ -161,4 +172,3 @@ if __name__ == '__main__':
 
         if save_max:
             torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_max.pth'))
-        torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_latest.pth'))
