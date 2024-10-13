@@ -27,6 +27,7 @@ parser.add_argument('-tau', type=float, default=0.25, help='tau value of LIF neu
 parser.add_argument('-k_dist', type=float, default=1, help='weight of distloss in loss calculation')
 parser.add_argument('-static-surrogate', action='store_true', help='toggle using static surrogate instead of dynamic')
 parser.add_argument('-loss_chg_discount', default=0.9)
+parser.add_argument('-update-dist-freq', default=100)
 
 args = parser.parse_args()
 
@@ -52,13 +53,13 @@ def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epo
         model_loss.backward()
         optimizer.step()
 
-        if(prev_loss is not None):
-            dist_loss = args.k_dist * (model_loss.detach() - prev_loss) * log_prob
+        if(i <= args.update_dist_freq):
+            with torch.no_grad():
+                new_outputs = model(images)
+                new_loss = criterion(new_outputs, labels).mean().detach()
+            dist_loss = args.k_dist * (new_loss - loss) * log_prob
             dist_loss.backward()
             dist_optimizer.step()
-
-        prev_loss = model_loss.detach()
-        prev_log_prob = log_prob
 
         print(model_loss.item(), dist_loss.item())
         #print("step done")
