@@ -133,8 +133,8 @@ if __name__ == '__main__':
 
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.SGD(model_params, lr=0.02, weight_decay=5e-4, momentum=0.9)
-    #dist_optimizer = optim.SGD(dist_params, lr=0.1, momentum=0.2)
-    dist_optimizer = optim.Adam(dist_params, lr=0.01)
+    dist_optimizer = optim.SGD(dist_params, lr=0.1, momentum=0.2)
+    #dist_optimizer = optim.Adam(dist_params, lr=0.01)
 
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
 
