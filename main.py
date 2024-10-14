@@ -58,19 +58,21 @@ def train(model, device, train_loader, criterion, optimizer, dist_optimizer, epo
                 new_outputs, _ = model(images)
                 new_outputs = new_outputs.mean(1)
                 new_loss = criterion(new_outputs, labels).mean().detach()
-            loss_chgs.append(new_loss - model.loss.item())
+            loss_chgs.append(new_loss - model_loss.item())
             log_probs.append(log_prob)
-            print(f"old loss {model_loss.item()} new loss {new_loss.item()}")
+            #print(f"old loss {model_loss.item()} new loss {new_loss.item()}")
             if(not args.static_surrogate and len(log_probs) == 5): 
                 dist_loss = torch.zeros(1, device=device)
                 reward = 0
                 for i in range(len(log_probs)-1, -1, -1):
                     reward += loss_chgs[i] + reward * args.loss_chg_discount
-                    dist_loss += args.k_dist * reward * log_prob
+                    dist_loss += args.k_dist * reward * log_probs[i]
                 dist_loss.backward()
                 dist_optimizer.step()
+                del loss_chgs[:]
+                del log_probs[:]
 
-        print(model_loss.item(), dist_loss.item())
+        #print(model_loss.item(), dist_loss.item())
         #print("step done")
 
         total += float(labels.size(0))
@@ -123,7 +125,7 @@ if __name__ == '__main__':
 
     model_params, dist_params = [], []
     for name, param in model.named_parameters():
-        if("gamma_theta" not in name):
+        if("surrogate" not in name):
             model_params.append(param)
         else:
             dist_params.append(param)

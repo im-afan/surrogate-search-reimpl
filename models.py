@@ -39,15 +39,17 @@ class LIF(nn.Module):
         self.surrogate_pred = nn.Sequential(
             nn.Linear(2, 10),
             nn.ReLU(),
-            #nn.Linear(10, 10),
-            #nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
+            nn.Linear(10, 10),
+            nn.ReLU(),
             nn.Linear(10, 2)
         )
 
     def forward(self, x, std_mean):
         theta = self.surrogate_pred(torch.tensor(std_mean, device=x.device).detach())
         theta = theta.view(2)
-        print(theta)
+        #print(theta)
         dist = torch.distributions.Normal(loc=theta[0], scale=torch.exp(theta[1]))
         mem_v = []
         mem = 0
